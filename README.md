@@ -2,6 +2,10 @@
 
 AStarLab is an interactive, educational A* visualizer written in modern C++ with SFML. It demonstrates A* on a weighted roadmap whose edges can be blocked by movable geometric obstacles.
 
+## Preview
+
+![AStarLab visualizing the A* search algorithm](docs/astartlab-preview.png)
+
 ## Features
 
 - Explicit graph nodes and weighted edges
@@ -28,16 +32,16 @@ AStarLab is an interactive, educational A* visualizer written in modern C++ with
 | Action | Mouse / keyboard |
 | --- | --- |
 | Move an obstacle | Left-drag a circle or rectangle |
-| Run A* | `Space`, `Enter`, or **Run search** |
+| Run or cancel A* | `Space`, `Enter`, or **Run/Cancel** |
 | Restore the demonstration | `R` or **Reset** |
-| Randomize nodes and costs | `G` or **Random graph** |
+| Randomize nodes and costs | `G` or **Random** |
 | Add a circular obstacle | Open **Obstacles**, choose **Add circle**, then click the graph |
 | Add a rectangular obstacle | Open **Obstacles**, choose **Add rectangle**, then click the graph |
 | Delete an obstacle | Open **Obstacles**, choose **Delete obstacle**, or right-click it |
 | Open the A* lessons | `L` or **Learn A*** |
 | Change lesson page | `Left` / `Right` arrow or the lesson buttons |
 | Toggle light/dark mode | `T` or the compact **Light/Dark** control |
-| Toggle normal/slow playback | `S` or the compact **Slow/Normal speed** control |
+| Change playback speed | `S` or the compact **Faster/Slower** control |
 
 ## Build and run
 
