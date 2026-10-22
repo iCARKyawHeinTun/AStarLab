@@ -16,7 +16,7 @@
 
   const elements = Object.fromEntries([
     "run-button","random-button","obstacle-tool","learn-button","reset-button",
-    "theme-button","speed-button","code-button","status","workspace","graph-canvas","engine-badge",
+    "theme-button","speed-button","code-button","status","workspace","algorithm-panel","graph-canvas","engine-badge",
     "pseudocode","active-nodes","g-value","h-value","f-value","learn-dialog","close-learn",
   ].map(id => [id, document.getElementById(id)]));
   const canvas = elements["graph-canvas"];
@@ -310,6 +310,7 @@
   elements["code-button"].addEventListener("click", () => {
     state.codeVisible = !state.codeVisible;
     elements.workspace.classList.toggle("code-hidden", !state.codeVisible);
+    elements["algorithm-panel"].hidden = !state.codeVisible;
     elements["code-button"].textContent = state.codeVisible ? "Hide code" : "Show code";
     elements["code-button"].setAttribute("aria-pressed", String(state.codeVisible));
     setStatus(state.codeVisible ? "Synchronized pseudocode visible" : "Synchronized pseudocode hidden");

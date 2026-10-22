@@ -90,6 +90,7 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 28px 28px; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 294px; gap: 20px; align-items: start; }
 .workspace.code-hidden { grid-template-columns: minmax(0, 1fr); }
 .workspace.code-hidden .algorithm-panel { display: none; }
+.algorithm-panel[hidden] { display: none; }
 .canvas-region { min-width: 0; }
 #graph-canvas {
   display: block;

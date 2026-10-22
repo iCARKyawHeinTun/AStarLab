@@ -617,7 +617,7 @@ void Application::render() {
     } else {
         drawRoadmap();
         drawObstacles();
-        drawSidebar();
+        if (showPseudocode_) drawSidebar();
         drawLegend();
     }
     drawHeader();
