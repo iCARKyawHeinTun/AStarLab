@@ -45,6 +45,7 @@ Use it as a native desktop application or in a browser. The deployed website run
 | Change lesson page | `Left` / `Right` arrow or the lesson buttons |
 | Toggle light/dark mode | `T` or the compact **Light/Dark** control |
 | Change playback speed | `S` or the compact **Faster/Slower** control |
+| Show or hide synchronized pseudocode | `P` or **Hide code/Show code** |
 
 ## Build and run
 

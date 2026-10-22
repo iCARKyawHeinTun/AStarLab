@@ -16,7 +16,7 @@
 
   const elements = Object.fromEntries([
     "run-button","random-button","obstacle-tool","learn-button","reset-button",
-    "theme-button","speed-button","status","graph-canvas","engine-badge",
+    "theme-button","speed-button","code-button","status","workspace","graph-canvas","engine-badge",
     "pseudocode","active-nodes","g-value","h-value","f-value","learn-dialog","close-learn",
   ].map(id => [id, document.getElementById(id)]));
   const canvas = elements["graph-canvas"];
@@ -25,7 +25,7 @@
     nodes: [], edges: [], obstacles: initialObstacles(), result: null,
     scores: new Map(), expanded: new Set(), visiblePath: new Set(),
     currentScore: null, neighbor: -1, activeLine: -1,
-    running: false, slow: true, dark: true, runToken: 0,
+    running: false, slow: true, dark: true, codeVisible: true, runToken: 0,
     drag: null, engine: null,
   };
 
@@ -307,6 +307,14 @@
     state.slow = !state.slow; elements["speed-button"].textContent = state.slow ? "Faster" : "Slower";
     setStatus(state.slow ? "Slower playback enabled" : "Faster playback enabled");
   });
+  elements["code-button"].addEventListener("click", () => {
+    state.codeVisible = !state.codeVisible;
+    elements.workspace.classList.toggle("code-hidden", !state.codeVisible);
+    elements["code-button"].textContent = state.codeVisible ? "Hide code" : "Show code";
+    elements["code-button"].setAttribute("aria-pressed", String(state.codeVisible));
+    setStatus(state.codeVisible ? "Synchronized pseudocode visible" : "Synchronized pseudocode hidden");
+    render();
+  });
   elements["learn-button"].addEventListener("click", () => elements["learn-dialog"].showModal());
   elements["close-learn"].addEventListener("click", () => elements["learn-dialog"].close());
   window.addEventListener("resize", render);
@@ -317,6 +325,7 @@
     if (event.key.toLowerCase() === "g" && !state.running) elements["random-button"].click();
     if (event.key.toLowerCase() === "s") elements["speed-button"].click();
     if (event.key.toLowerCase() === "t") elements["theme-button"].click();
+    if (event.key.toLowerCase() === "p") elements["code-button"].click();
     if (event.key.toLowerCase() === "l" && !state.running) elements["learn-button"].click();
   });
 

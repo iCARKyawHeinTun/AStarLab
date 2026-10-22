@@ -255,6 +255,12 @@ void Application::toggleSpeed() {
     status_ = slowMode_ ? "Slower playback enabled" : "Faster playback enabled";
 }
 
+void Application::togglePseudocode() {
+    showPseudocode_ = !showPseudocode_;
+    status_ = showPseudocode_ ? "Synchronized pseudocode visible"
+                              : "Synchronized pseudocode hidden";
+}
+
 void Application::toggleLearningView() {
     learningView_ = !learningView_;
     obstacleMenuOpen_ = false;
@@ -382,9 +388,10 @@ void Application::handleMousePressed(sf::Vector2i pixel, sf::Mouse::Button butto
             return;
         }
 
-        const sf::FloatRect resetControl({810.f, 74.f}, {70.f, 32.f});
-        const sf::FloatRect themeControl({896.f, 74.f}, {100.f, 32.f});
-        const sf::FloatRect speedControl({1012.f, 74.f}, {112.f, 32.f});
+        const sf::FloatRect resetControl({770.f, 74.f}, {70.f, 32.f});
+        const sf::FloatRect themeControl({856.f, 74.f}, {100.f, 32.f});
+        const sf::FloatRect speedControl({972.f, 74.f}, {112.f, 32.f});
+        const sf::FloatRect codeControl({1100.f, 74.f}, {130.f, 32.f});
         if (resetControl.contains(screen) && !learningView_ && !simulationRunning) {
             resetScene();
             return;
@@ -395,6 +402,10 @@ void Application::handleMousePressed(sf::Vector2i pixel, sf::Mouse::Button butto
         }
         if (speedControl.contains(screen)) {
             toggleSpeed();
+            return;
+        }
+        if (codeControl.contains(screen) && !learningView_) {
+            togglePseudocode();
             return;
         }
 
@@ -500,6 +511,7 @@ void Application::handleKeyPressed(sf::Keyboard::Scancode key) {
     if (key == sf::Keyboard::Scancode::G && !learningView_ && !isSimulationRunning()) randomizeRoadmap();
     if (key == sf::Keyboard::Scancode::T) toggleTheme();
     if (key == sf::Keyboard::Scancode::S) toggleSpeed();
+    if (key == sf::Keyboard::Scancode::P && !learningView_) togglePseudocode();
     if (key == sf::Keyboard::Scancode::L && !isSimulationRunning()) toggleLearningView();
     if (learningView_ && key == sf::Keyboard::Scancode::Left) {
         learningPage_ = std::max(0, learningPage_ - 1);
@@ -637,10 +649,11 @@ void Application::drawHeader() {
                  unavailable ? Muted : (active ? Panel : Text), true);
     }
 
-    const std::array<std::tuple<sf::FloatRect, std::string, sf::Color>, 3> utilities{{
-        {{{810.f, 74.f}, {70.f, 32.f}}, "Reset", simulationRunning ? Edge : Muted},
-        {{{896.f, 74.f}, {100.f, 32.f}}, darkMode_ ? "Light" : "Dark", Muted},
-        {{{1012.f, 74.f}, {112.f, 32.f}}, slowMode_ ? "Faster" : "Slower", Expanded},
+    const std::array<std::tuple<sf::FloatRect, std::string, sf::Color>, 4> utilities{{
+        {{{770.f, 74.f}, {70.f, 32.f}}, "Reset", simulationRunning ? Edge : Muted},
+        {{{856.f, 74.f}, {100.f, 32.f}}, darkMode_ ? "Light" : "Dark", Muted},
+        {{{972.f, 74.f}, {112.f, 32.f}}, slowMode_ ? "Faster" : "Slower", Expanded},
+        {{{1100.f, 74.f}, {130.f, 32.f}}, showPseudocode_ ? "Hide code" : "Show code", Path},
     }};
     for (const auto& [bounds, label, accent] : utilities) {
         sf::RectangleShape control(bounds.size);
@@ -732,55 +745,62 @@ void Application::drawObstacles() {
 
 void Application::drawSidebar() {
     const float left = 982.f;
-    drawText("A* pseudocode", {left, 180.f}, 2.1f, Text, true);
-    drawText("The active line follows the search", {left, 211.f}, 1.05f, Muted);
+    if (showPseudocode_) {
+        drawText("A* pseudocode", {left, 180.f}, 2.1f, Text, true);
+        drawText("The active line follows the search", {left, 211.f}, 1.05f, Muted);
 
-    const std::array<std::string, 9> pseudocode{{
-        "1  open = {start}",
-        "2  while open not empty",
-        "3    current = lowest f",
-        "4    if current is goal",
-        "5    for each neighbor",
-        "6      newG = g + cost",
-        "7      if newG < old g",
-        "8        update g, h, f",
-        "9  rebuild best path",
-    }};
-    float lineTop = 237.f;
-    for (std::size_t index = 0; index < pseudocode.size(); ++index) {
-        const bool active = activePseudocodeLine_ == static_cast<int>(index + 1);
-        if (active) {
-            sf::RectangleShape highlight({255.f, 28.f});
-            highlight.setPosition({left, lineTop - 4.f});
-            highlight.setFillColor(Expanded);
-            window_.draw(highlight);
+        const std::array<std::string, 9> pseudocode{{
+            "1  open = {start}",
+            "2  while open not empty",
+            "3    current = lowest f",
+            "4    if current is goal",
+            "5    for each neighbor",
+            "6      newG = g + cost",
+            "7      if newG < old g",
+            "8        update g, h, f",
+            "9  rebuild best path",
+        }};
+        float lineTop = 237.f;
+        for (std::size_t index = 0; index < pseudocode.size(); ++index) {
+            const bool active = activePseudocodeLine_ == static_cast<int>(index + 1);
+            if (active) {
+                sf::RectangleShape highlight({255.f, 28.f});
+                highlight.setPosition({left, lineTop - 4.f});
+                highlight.setFillColor(Expanded);
+                window_.draw(highlight);
+            }
+            drawText(pseudocode[index], {left + 8.f, lineTop}, 1.05f,
+                     active ? Panel : Text, active);
+            lineTop += 31.f;
         }
-        drawText(pseudocode[index], {left + 8.f, lineTop}, 1.05f,
-                 active ? Panel : Text, active);
-        lineTop += 31.f;
+    } else {
+        drawText("Visualization focus", {left, 180.f}, 2.1f, Text, true);
+        drawText("Pseudocode is hidden", {left, 216.f}, 1.25f, Muted);
+        drawText("Use Show code to follow each line", {left, 242.f}, 1.05f, Muted);
     }
 
+    const float liveTop = showPseudocode_ ? 532.f : 285.f;
     sf::RectangleShape current({255.f, 118.f});
-    current.setPosition({left, 532.f});
+    current.setPosition({left, liveTop});
     current.setFillColor(PanelLight);
     current.setOutlineThickness(1.f);
     current.setOutlineColor(currentScore_ ? Expanded : Edge);
     window_.draw(current);
-    drawText("Live values", {left + 14.f, 544.f}, 1.25f, Muted, true);
+    drawText("Live values", {left + 14.f, liveTop + 12.f}, 1.25f, Muted, true);
     if (currentScore_) {
         std::string nodes = "Current  " + std::to_string(currentScore_->nodeId);
         if (currentNeighbor_ >= 0) nodes += "     Neighbor  " + std::to_string(currentNeighbor_);
-        drawText(nodes, {left + 14.f, 570.f}, 1.25f, Text, true);
-        drawText("g " + std::to_string(currentScore_->g), {left + 14.f, 606.f}, 1.55f, Start, true);
-        drawText("h " + std::to_string(currentScore_->h), {left + 91.f, 606.f}, 1.55f, Goal, true);
-        drawText("f " + std::to_string(currentScore_->f), {left + 168.f, 606.f}, 1.55f, Path, true);
+        drawText(nodes, {left + 14.f, liveTop + 38.f}, 1.25f, Text, true);
+        drawText("g " + std::to_string(currentScore_->g), {left + 14.f, liveTop + 74.f}, 1.55f, Start, true);
+        drawText("h " + std::to_string(currentScore_->h), {left + 91.f, liveTop + 74.f}, 1.55f, Goal, true);
+        drawText("f " + std::to_string(currentScore_->f), {left + 168.f, liveTop + 74.f}, 1.55f, Path, true);
     } else {
-        drawText("Run the search to begin", {left + 14.f, 581.f}, 1.25f, Muted);
+        drawText("Run the search to begin", {left + 14.f, liveTop + 49.f}, 1.25f, Muted);
     }
 
     drawText("Space  Run     S  Speed", {left, 681.f}, 1.2f, Muted);
     drawText("R  Reset       G  Random", {left, 704.f}, 1.2f, Muted);
-    drawText("T  Theme       L  Learn", {left, 727.f}, 1.2f, Muted);
+    drawText("T  Theme       P  Code       L  Learn", {left, 727.f}, 1.05f, Muted);
 }
 
 void Application::drawLegend() {

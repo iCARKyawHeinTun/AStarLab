@@ -48,6 +48,7 @@ private:
     bool isSimulationRunning() const;
     void toggleTheme();
     void toggleSpeed();
+    void togglePseudocode();
     void toggleLearningView();
     void addObstacleAt(sf::Vector2f local);
     bool deleteObstacleAt(sf::Vector2f local);
@@ -119,6 +120,7 @@ private:
     std::array<Button, 4> buttons_;
     bool darkMode_{true};
     bool slowMode_{true};
+    bool showPseudocode_{true};
     bool learningView_{false};
     bool obstacleMenuOpen_{false};
     int learningPage_{0};
