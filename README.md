@@ -2,6 +2,8 @@
 
 AStarLab is an interactive, educational A* visualizer written in modern C++ with SFML. It demonstrates A* on a weighted roadmap whose edges can be blocked by movable geometric obstacles.
 
+Use it as a native desktop application or in a browser. The deployed website runs the same C++ graph and A* search engine through WebAssembly, while retaining a JavaScript fallback for local development.
+
 ## Preview
 
 ![AStarLab visualizing the A* search algorithm](docs/astartlab-preview.png)
@@ -26,6 +28,7 @@ AStarLab is an interactive, educational A* visualizer written in modern C++ with
 - Cancel control during playback, with graph and obstacle editing locked until cancellation
 - Unit tests for reachable, blocked, and detour scenarios
 - Cross-platform CMake project for macOS, Windows, and Linux
+- Browser version powered by the shared C++ engine compiled to WebAssembly
 
 ## Controls
 
@@ -66,6 +69,29 @@ You can also run the executable directly:
 
 On Windows, use the generated executable in `build/Release/`.
 
+## Browser version
+
+The browser interface is a static site in `web/`. It works directly with its JavaScript fallback; production deployment compiles the existing C++ search core to WebAssembly with Emscripten.
+
+Serve it locally from the project root:
+
+```sh
+python3 -m http.server 8080
+```
+
+Then open `http://localhost:8080/web/`.
+
+To build the WebAssembly core locally, install Emscripten and run:
+
+```sh
+emcmake cmake -S web -B build-web -DCMAKE_BUILD_TYPE=Release
+cmake --build build-web
+mkdir -p web/generated
+cp build-web/astar-core.js build-web/astar-core.wasm web/generated/
+```
+
+The included GitHub Pages workflow builds and deploys the browser lab after every push to `main`.
+
 ## Run the tests
 
 ```sh
@@ -78,6 +104,7 @@ ctest --test-dir build --output-on-failure
 include/       Public C++ headers
 src/           Weighted graph, A* engine, collision logic, and SFML application
 tests/         Algorithm tests that run without opening a window
+web/           Responsive browser UI and WebAssembly bridge
 CMakeLists.txt Cross-platform build configuration
 ```
 

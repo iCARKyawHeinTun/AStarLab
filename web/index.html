@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An interactive A* pathfinding laboratory for learning weighted graph search.">
+  <title>AStarLab — Interactive A* Visualizer</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="generated/astar-core.js"></script>
+  <script defer src="astar-engine.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <h1>AStarLab</h1>
+      <p>See every decision behind the shortest path.</p>
+    </div>
+    <nav class="toolbar" aria-label="Lab controls">
+      <button id="run-button" class="primary" disabled>Run</button>
+      <button id="random-button">Random</button>
+      <label class="select-control">
+        <span>Obstacles</span>
+        <select id="obstacle-tool" aria-label="Obstacle tool">
+          <option value="move">Move</option>
+          <option value="circle">Add circle</option>
+          <option value="rectangle">Add rectangle</option>
+          <option value="delete">Delete</option>
+        </select>
+      </label>
+      <button id="learn-button">Learn A*</button>
+      <button id="reset-button" class="quiet">Reset</button>
+      <button id="theme-button" class="quiet">Light</button>
+      <button id="speed-button" class="quiet">Faster</button>
+    </nav>
+  </header>
+
+  <main>
+    <p id="status" class="status" role="status" aria-live="polite">Ready — move an obstacle or run the search</p>
+    <div class="workspace">
+      <section class="canvas-region" aria-label="Weighted graph visualization">
+        <canvas id="graph-canvas" width="910" height="570">
+          Your browser does not support the canvas used by AStarLab.
+        </canvas>
+        <div class="legend" aria-label="Graph legend">
+          <span><i class="start"></i>Start</span>
+          <span><i class="goal"></i>Goal</span>
+          <span><i class="explored"></i>Explored</span>
+          <span><i class="path"></i>Best path</span>
+          <span><i class="obstacle"></i>Obstacle</span>
+        </div>
+      </section>
+
+      <aside class="algorithm-panel" aria-label="Synchronized A star pseudocode">
+        <div class="panel-heading">
+          <h2>A* pseudocode</h2>
+          <span id="engine-badge">Loading C++ core…</span>
+        </div>
+        <ol id="pseudocode" class="pseudocode">
+          <li data-line="1">open = {start}</li>
+          <li data-line="2">while open not empty</li>
+          <li data-line="3">current = lowest f</li>
+          <li data-line="4">if current is goal</li>
+          <li data-line="5">for each neighbor</li>
+          <li data-line="6">newG = g + cost</li>
+          <li data-line="7">if newG &lt; old g</li>
+          <li data-line="8">update g, h, f</li>
+          <li data-line="9">rebuild best path</li>
+        </ol>
+        <section class="live-values" aria-label="Current search values">
+          <h3>Live values</h3>
+          <p id="active-nodes">Run the search to begin</p>
+          <dl>
+            <div><dt>g</dt><dd id="g-value">—</dd></div>
+            <div><dt>h</dt><dd id="h-value">—</dd></div>
+            <div><dt>f</dt><dd id="f-value">—</dd></div>
+          </dl>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <dialog id="learn-dialog">
+    <div class="dialog-heading">
+      <div>
+        <span class="eyebrow">A* from the ground up</span>
+        <h2>How A* finds a route</h2>
+      </div>
+      <button id="close-learn" aria-label="Close lessons">Close</button>
+    </div>
+    <div class="lesson-grid">
+      <section><strong>1. Model a graph</strong><p>Nodes are possible positions. Edges are allowed moves, and every edge has a cost.</p></section>
+      <section><strong>2. Score candidates</strong><p><b>g</b> is cost so far, <b>h</b> estimates what remains, and <b>f = g + h</b>.</p></section>
+      <section><strong>3. Explore wisely</strong><p>A* repeatedly chooses the open node with the smallest f score and tests its neighbors.</p></section>
+      <section><strong>4. Rebuild the answer</strong><p>When the goal is reached, stored parent links reveal the lowest-cost route.</p></section>
+    </div>
+  </dialog>
+</body>
+</html>

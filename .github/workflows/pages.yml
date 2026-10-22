@@ -1,0 +1,50 @@
+name: Deploy browser lab
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: emscripten/emsdk:3.1.74
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test browser fallback engine
+        run: node web/tests/engine.test.js
+      - name: Build shared C++ core as WebAssembly
+        run: |
+          emcmake cmake -S web -B build-web -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web --config Release
+      - name: Assemble static site
+        run: |
+          mkdir -p site/generated site/assets
+          cp web/index.html web/styles.css web/app.js web/astar-engine.js site/
+          cp build-web/astar-core.js build-web/astar-core.wasm site/generated/
+          cp assets/Inter-Variable.ttf assets/Inter-OFL.txt site/assets/
+          touch site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

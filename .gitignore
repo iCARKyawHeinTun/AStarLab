@@ -1,4 +1,7 @@
 /build/
+/build-web/
+/site/
+/web/generated/
 /.cache/
 .DS_Store
 
