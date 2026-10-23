@@ -18,6 +18,8 @@ const nodes = [{ id: 0, x: 0, y: 0 }, { id: 1, x: 40, y: 20 }, { id: 2, x: 100, 
   assert.deepEqual(result.path, [0, 1, 2]);
   assert.equal(result.steps[0].type, StepType.Initialize);
   assert.equal(result.steps.at(-1).type, StepType.GoalReached);
+  assert.equal(result.steps.at(-1).pseudocodeLine, 5);
+  assert.equal(result.steps.find(step => step.type === StepType.UpdateNeighbor).pseudocodeLine, 9);
 }
 
 {

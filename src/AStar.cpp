@@ -65,22 +65,22 @@ SearchResult AStar::search(const Graph& graph, int start, int goal) const {
                 result.path.push_back(step);
             }
             std::reverse(result.path.begin(), result.path.end());
-            result.steps.push_back({SearchStepType::GoalReached, 9, current, -1, 0,
+            result.steps.push_back({SearchStepType::GoalReached, 5, current, -1, 0,
                                     gScore[current], -1, true, currentScore});
             return result;
         }
 
         for (const auto [neighbor, edgeCost] : graph.neighbors(current)) {
             if (closed.count(neighbor) != 0U) continue;
-            result.steps.push_back({SearchStepType::InspectNeighbor, 5, current, neighbor,
+            result.steps.push_back({SearchStepType::InspectNeighbor, 6, current, neighbor,
                                     edgeCost, 0, -1, false, currentScore});
             const int tentative = gScore[current] + edgeCost;
             const auto known = gScore.find(neighbor);
             const int previous = known == gScore.end() ? -1 : known->second;
-            result.steps.push_back({SearchStepType::CalculateTentative, 6, current, neighbor,
+            result.steps.push_back({SearchStepType::CalculateTentative, 7, current, neighbor,
                                     edgeCost, tentative, previous, false, currentScore});
             const bool improved = known == gScore.end() || tentative < known->second;
-            result.steps.push_back({SearchStepType::CompareCost, 7, current, neighbor,
+            result.steps.push_back({SearchStepType::CompareCost, 8, current, neighbor,
                                     edgeCost, tentative, previous, improved, currentScore});
             if (improved) {
                 cameFrom[neighbor] = current;
@@ -88,7 +88,7 @@ SearchResult AStar::search(const Graph& graph, int start, int goal) const {
                 const int estimate = heuristic(graph.node(neighbor), graph.node(goal));
                 const NodeScore neighborScore{neighbor, tentative, estimate, tentative + estimate};
                 frontier.push({neighbor, tentative + estimate, sequence++});
-                result.steps.push_back({SearchStepType::UpdateNeighbor, 8, current, neighbor,
+                result.steps.push_back({SearchStepType::UpdateNeighbor, 9, current, neighbor,
                                         edgeCost, tentative, previous, true, neighborScore});
             }
         }

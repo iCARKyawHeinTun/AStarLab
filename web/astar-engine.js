@@ -54,21 +54,21 @@
             result.path.push(cursor);
           }
           result.path.reverse();
-          result.steps.push(this.step(StepType.GoalReached, 9, current, -1, 0,
+          result.steps.push(this.step(StepType.GoalReached, 5, current, -1, 0,
             gScore.get(current), -1, true, currentScore));
           return result;
         }
 
         for (const [neighbor, edgeCost] of neighbors[current]) {
           if (closed.has(neighbor)) continue;
-          result.steps.push(this.step(StepType.InspectNeighbor, 5, current, neighbor,
+          result.steps.push(this.step(StepType.InspectNeighbor, 6, current, neighbor,
             edgeCost, 0, -1, false, currentScore));
           const tentative = gScore.get(current) + edgeCost;
           const previous = gScore.has(neighbor) ? gScore.get(neighbor) : -1;
-          result.steps.push(this.step(StepType.CalculateTentative, 6, current, neighbor,
+          result.steps.push(this.step(StepType.CalculateTentative, 7, current, neighbor,
             edgeCost, tentative, previous, false, currentScore));
           const improved = previous < 0 || tentative < previous;
-          result.steps.push(this.step(StepType.CompareCost, 7, current, neighbor,
+          result.steps.push(this.step(StepType.CompareCost, 8, current, neighbor,
             edgeCost, tentative, previous, improved, currentScore));
           if (improved) {
             cameFrom.set(neighbor, current);
@@ -76,7 +76,7 @@
             const estimate = heuristic(nodes[neighbor], nodes[goal]);
             const neighborScore = score(neighbor, tentative, estimate, tentative + estimate);
             open.push({ nodeId: neighbor, f: neighborScore.f, sequence: sequence++ });
-            result.steps.push(this.step(StepType.UpdateNeighbor, 8, current, neighbor,
+            result.steps.push(this.step(StepType.UpdateNeighbor, 9, current, neighbor,
               edgeCost, tentative, previous, true, neighborScore));
           }
         }

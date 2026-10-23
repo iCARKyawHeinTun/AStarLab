@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="An interactive A* pathfinding laboratory for learning weighted graph search.">
   <title>AStarLab — Interactive A* Visualizer</title>
-  <link rel="stylesheet" href="styles.css?v=2">
-  <script defer src="generated/astar-core.js?v=2"></script>
-  <script defer src="astar-engine.js?v=2"></script>
+  <link rel="stylesheet" href="styles.css?v=3">
+  <script defer src="generated/astar-core.js?v=3"></script>
+  <script defer src="astar-engine.js?v=3"></script>
   <script defer src="app.js?v=4"></script>
 </head>
 <body>
@@ -58,15 +58,15 @@
           <span id="engine-badge">Loading C++ core…</span>
         </div>
         <ol id="pseudocode" class="pseudocode">
-          <li data-line="1">open = {start}</li>
-          <li data-line="2">while open not empty</li>
-          <li data-line="3">current = lowest f</li>
-          <li data-line="4">if current is goal</li>
-          <li data-line="5">for each neighbor</li>
-          <li data-line="6">newG = g + cost</li>
-          <li data-line="7">if newG &lt; old g</li>
-          <li data-line="8">update g, h, f</li>
-          <li data-line="9">rebuild best path</li>
+          <li data-line="1"><code><span class="syntax-variable">openSet</span> <span class="syntax-operator">=</span> <span class="syntax-function">PriorityQueue</span>({ <span class="syntax-variable">start</span> })</code></li>
+          <li data-line="2"><code><span class="syntax-keyword">while not</span> <span class="syntax-variable">openSet</span>.<span class="syntax-function">empty</span>():</code></li>
+          <li data-line="3" class="indent-1"><code><span class="syntax-variable">current</span> <span class="syntax-operator">=</span> <span class="syntax-variable">openSet</span>.<span class="syntax-function">popLowestF</span>()</code></li>
+          <li data-line="4" class="indent-1"><code><span class="syntax-keyword">if</span> <span class="syntax-variable">current</span> <span class="syntax-operator">==</span> <span class="syntax-variable">goal</span>:</code></li>
+          <li data-line="5" class="indent-2"><code><span class="syntax-keyword">return</span> <span class="syntax-function">reconstructPath</span>(<span class="syntax-variable">current</span>)</code></li>
+          <li data-line="6" class="indent-1"><code><span class="syntax-keyword">for</span> <span class="syntax-variable">neighbor</span> <span class="syntax-keyword">in</span> <span class="syntax-function">neighbors</span>(<span class="syntax-variable">current</span>):</code></li>
+          <li data-line="7" class="indent-2"><code><span class="syntax-variable">tentativeG</span> <span class="syntax-operator">=</span> <span class="syntax-variable">g</span>[<span class="syntax-variable">current</span>] <span class="syntax-operator">+</span> <span class="syntax-function">cost</span>(<span class="syntax-variable">current</span>, <span class="syntax-variable">neighbor</span>)</code></li>
+          <li data-line="8" class="indent-2"><code><span class="syntax-keyword">if</span> <span class="syntax-variable">tentativeG</span> <span class="syntax-operator">&lt;</span> <span class="syntax-variable">g</span>[<span class="syntax-variable">neighbor</span>]:</code></li>
+          <li data-line="9" class="indent-3"><code><span class="syntax-function">updateScoresAndParent</span>(<span class="syntax-variable">neighbor</span>, <span class="syntax-variable">tentativeG</span>)</code></li>
         </ol>
         <section class="live-values" aria-label="Current search values">
           <h3>Live values</h3>

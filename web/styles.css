@@ -21,6 +21,10 @@
   --goal: #dd6965;
   --obstacle: #896c4d;
   --obstacle-border: #daa463;
+  --syntax-keyword: #c7a0ec;
+  --syntax-function: #78c8e8;
+  --syntax-variable: #e7c980;
+  --syntax-operator: #b4bbc5;
   --shadow: rgba(0, 0, 0, .24);
 }
 
@@ -40,6 +44,10 @@
   --goal: #de5b58;
   --obstacle: #efcda1;
   --obstacle-border: #c27f37;
+  --syntax-keyword: #7b45a6;
+  --syntax-function: #176c91;
+  --syntax-variable: #885c08;
+  --syntax-operator: #596575;
   --shadow: rgba(39, 50, 66, .12);
 }
 
@@ -121,9 +129,33 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 28px 28px; }
 .panel-heading { padding: 18px 18px 12px; }
 .panel-heading h2 { margin-bottom: 5px; font-size: 1.15rem; }
 #engine-badge { color: var(--muted); font-size: .72rem; }
-.pseudocode { margin: 0; padding: 0; list-style: none; counter-reset: line; }
-.pseudocode li { padding: 9px 18px; color: var(--muted); font: 500 .83rem ui-monospace, SFMono-Regular, Menlo, monospace; }
-.pseudocode li.active { background: var(--expanded); color: #111c20; }
+.pseudocode { margin: 0; padding: 8px 0; list-style: none; }
+.pseudocode li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  padding: 6px 12px 6px 0;
+  color: var(--muted);
+  font: 500 .76rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.pseudocode li::before {
+  content: attr(data-line);
+  align-self: start;
+  padding-right: 9px;
+  border-right: 1px solid color-mix(in srgb, var(--edge) 60%, transparent);
+  color: var(--edge);
+  text-align: right;
+  user-select: none;
+}
+.pseudocode code { min-width: 0; padding-left: 10px; color: var(--text); font: inherit; overflow-wrap: anywhere; }
+.pseudocode .indent-1 code { padding-left: 24px; }
+.pseudocode .indent-2 code { padding-left: 38px; }
+.pseudocode .indent-3 code { padding-left: 52px; }
+.pseudocode li.active { background: color-mix(in srgb, var(--expanded) 30%, transparent); }
+.pseudocode li.active::before { color: var(--text); }
+.syntax-keyword { color: var(--syntax-keyword); }
+.syntax-function { color: var(--syntax-function); }
+.syntax-variable { color: var(--syntax-variable); }
+.syntax-operator { color: var(--syntax-operator); }
 .live-values { margin: 14px; padding: 14px; border-radius: 10px; background: var(--panel-soft); }
 .live-values h3 { margin-bottom: 10px; color: var(--muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .08em; }
 .live-values p { min-height: 20px; margin-bottom: 12px; font-size: .88rem; }

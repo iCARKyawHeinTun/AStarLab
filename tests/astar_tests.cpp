@@ -33,10 +33,14 @@ int main() {
                 "the trace should begin by initializing the open set");
         require(result.steps.back().type == SearchStepType::GoalReached,
                 "a successful trace should end by rebuilding the path");
+        require(result.steps.back().pseudocodeLine == 5,
+                "reaching the goal should highlight the return statement");
         bool recordedUpdate = false;
         for (const auto& step : result.steps) {
             if (step.type == SearchStepType::UpdateNeighbor && step.neighborNode == 1) {
                 recordedUpdate = true;
+                require(step.pseudocodeLine == 9,
+                        "updating a neighbor should highlight the nested update statement");
             }
         }
         require(recordedUpdate, "the trace should record neighbor cost updates");

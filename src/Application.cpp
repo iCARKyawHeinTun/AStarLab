@@ -773,15 +773,15 @@ void Application::drawSidebar() {
         drawText("The active line follows the search", {left, 211.f}, 1.05f, Muted);
 
         const std::array<std::string, 9> pseudocode{{
-            "1  open = {start}",
-            "2  while open not empty",
-            "3    current = lowest f",
-            "4    if current is goal",
-            "5    for each neighbor",
-            "6      newG = g + cost",
-            "7      if newG < old g",
-            "8        update g, h, f",
-            "9  rebuild best path",
+            "1  open = { start }",
+            "2  while open is not empty:",
+            "3      current = popLowestF(open)",
+            "4      if current == goal:",
+            "5          return path(current)",
+            "6      for next in neighbors(current):",
+            "7          newG = g[current] + edgeCost",
+            "8          if newG < g[next]:",
+            "9              update(next, newG, current)",
         }};
         float lineTop = 237.f;
         for (std::size_t index = 0; index < pseudocode.size(); ++index) {
