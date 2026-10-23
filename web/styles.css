@@ -166,20 +166,40 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 28px 28px; }
 
 dialog {
   width: min(760px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
   border: 1px solid var(--edge);
   border-radius: 16px;
   padding: 24px;
   background: var(--panel);
   color: var(--text);
   box-shadow: 0 24px 80px rgba(0, 0, 0, .4);
+  overflow: auto;
 }
 dialog::backdrop { background: rgba(8, 10, 14, .68); }
 .dialog-heading { display: flex; align-items: start; justify-content: space-between; gap: 20px; }
-.dialog-heading h2 { margin-bottom: 20px; }
+.dialog-heading h2 { margin-bottom: 12px; }
 .eyebrow { color: var(--expanded); font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-.lesson-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.lesson-grid section { padding: 16px; border-radius: 10px; background: var(--panel-soft); }
-.lesson-grid p { margin: 8px 0 0; color: var(--muted); line-height: 1.55; font-size: .9rem; }
+.lesson-content { line-height: 1.65; }
+.lesson-content p, .lesson-content li, .concept-list dd { color: var(--muted); font-size: .92rem; }
+.lesson-intro { margin: 0; padding-bottom: 20px; font-size: 1rem !important; }
+.lesson-section { padding: 22px 0; border-top: 1px solid var(--edge); }
+.lesson-section h3 { margin-bottom: 9px; font-size: 1.05rem; }
+.lesson-section p:last-child, .worked-example p:last-child { margin-bottom: 0; }
+.concept-list { display: grid; gap: 8px; margin: 14px 0; }
+.concept-list div { display: grid; grid-template-columns: 96px 1fr; gap: 14px; }
+.concept-list dt { color: var(--text); font-weight: 700; }
+.concept-list dd { margin: 0; }
+.formula { margin: 16px 0; padding: 13px; border-radius: 8px; background: var(--panel-soft); text-align: center; font: 500 1.15rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.score-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.score-grid div { padding: 13px; border-radius: 8px; background: var(--panel-soft); }
+.score-grid strong { color: var(--path); font: 700 1rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.score-grid p { margin: 6px 0 0; font-size: .84rem; }
+.algorithm-steps { margin: 14px 0; padding-left: 24px; }
+.algorithm-steps li, .lesson-section li { padding-left: 5px; margin-bottom: 8px; }
+.lesson-section code { color: var(--syntax-function); font: 500 .88em ui-monospace, SFMono-Regular, Menlo, monospace; }
+.worked-example { padding: 16px; border-left: 4px solid var(--expanded); background: var(--panel-soft); }
+.lesson-section ul { margin: 12px 0; padding-left: 22px; }
+.lesson-experiment { padding-bottom: 0; }
 
 @media (max-width: 1050px) {
   .site-header { align-items: flex-start; flex-direction: column; }
@@ -196,6 +216,8 @@ dialog::backdrop { background: rgba(8, 10, 14, .68); }
   .toolbar { width: 100%; }
   .toolbar button, .select-control { flex: 1 1 auto; }
   .algorithm-panel { display: block; }
-  .lesson-grid { grid-template-columns: 1fr; }
+  dialog { padding: 18px; }
+  .score-grid { grid-template-columns: 1fr; }
+  .concept-list div { grid-template-columns: 1fr; gap: 2px; }
   .legend { gap: 10px; }
 }

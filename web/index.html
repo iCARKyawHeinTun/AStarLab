@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="An interactive A* pathfinding laboratory for learning weighted graph search.">
   <title>AStarLab — Interactive A* Visualizer</title>
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
   <script defer src="generated/astar-core.js?v=3"></script>
   <script defer src="astar-engine.js?v=3"></script>
   <script defer src="app.js?v=4"></script>
@@ -85,16 +85,82 @@
     <div class="dialog-heading">
       <div>
         <span class="eyebrow">A* from the ground up</span>
-        <h2>How A* finds a route</h2>
+        <h2>Learn the A* search algorithm</h2>
       </div>
       <button id="close-learn" aria-label="Close lessons">Close</button>
     </div>
-    <div class="lesson-grid">
-      <section><strong>1. Model a graph</strong><p>Nodes are possible positions. Edges are allowed moves, and every edge has a cost.</p></section>
-      <section><strong>2. Score candidates</strong><p><b>g</b> is cost so far, <b>h</b> estimates what remains, and <b>f = g + h</b>.</p></section>
-      <section><strong>3. Explore wisely</strong><p>A* repeatedly chooses the open node with the smallest f score and tests its neighbors.</p></section>
-      <section><strong>4. Rebuild the answer</strong><p>When the goal is reached, stored parent links reveal the lowest-cost route.</p></section>
-    </div>
+    <article class="lesson-content">
+      <p class="lesson-intro">A* finds a minimum-cost route through a weighted graph. It combines the cost already paid with an estimate of the cost still remaining, so it can search toward the goal without ignoring cheaper alternatives.</p>
+
+      <section class="lesson-section">
+        <h3>1. Represent the problem as a graph</h3>
+        <p>A* does not move through empty space directly. It searches a collection of connected positions:</p>
+        <dl class="concept-list">
+          <div><dt>Node</dt><dd>A position the search can visit. In AStarLab, the numbered circles are nodes.</dd></div>
+          <div><dt>Edge</dt><dd>An allowed move between two nodes. The line connecting them represents that move.</dd></div>
+          <div><dt>Cost</dt><dd>The number shown on an edge. A* minimizes the sum of these costs, not the number of edges.</dd></div>
+          <div><dt>Start and goal</dt><dd>The green node is where the route begins; the red node is the destination.</dd></div>
+        </dl>
+        <p>Obstacles disable every edge they intersect. Moving an obstacle therefore changes the graph that A* searches.</p>
+      </section>
+
+      <section class="lesson-section">
+        <h3>2. Understand the three scores</h3>
+        <p>For every candidate node <em>n</em>, A* calculates:</p>
+        <div class="formula" aria-label="f of n equals g of n plus h of n"><b>f(n)</b> = <b>g(n)</b> + <b>h(n)</b></div>
+        <div class="score-grid">
+          <div><strong>g(n)</strong><p>The exact cost of the cheapest route currently known from the start to <em>n</em>.</p></div>
+          <div><strong>h(n)</strong><p>A heuristic estimate of the remaining cost from <em>n</em> to the goal.</p></div>
+          <div><strong>f(n)</strong><p>The estimated total route cost if the search continues through <em>n</em>.</p></div>
+        </div>
+        <p>AStarLab uses straight-line distance divided by 10 and rounded down for <b>h</b>. A smaller <b>f</b> makes a node more promising, so it receives higher priority.</p>
+      </section>
+
+      <section class="lesson-section">
+        <h3>3. Follow the search loop</h3>
+        <ol class="algorithm-steps">
+          <li>Set the start node's <b>g</b> to 0 and place it in the <b>open set</b>, a priority queue ordered by <b>f</b>.</li>
+          <li>Remove the open node with the smallest <b>f</b>. This becomes the <b>current</b> node.</li>
+          <li>If current is the goal, follow its stored parent links backward to reconstruct the path.</li>
+          <li>Otherwise, inspect each reachable neighbor and calculate <code>tentativeG = g(current) + edgeCost</code>.</li>
+          <li>If that value is cheaper than the neighbor's known <b>g</b>, store the better <b>g</b>, calculate its <b>h</b> and <b>f</b>, and set current as its parent.</li>
+          <li>Move current to the <b>closed set</b> and repeat. Closed nodes have already been expanded.</li>
+        </ol>
+        <p>If the open set becomes empty before reaching the goal, no route exists through the enabled edges.</p>
+      </section>
+
+      <section class="lesson-section">
+        <h3>4. Work through one neighbor update</h3>
+        <div class="worked-example">
+          <p>Assume the current node has <b>g = 12</b>, the edge to a neighbor costs <b>5</b>, and that neighbor previously had <b>g = 21</b>.</p>
+          <p><code>tentativeG = 12 + 5 = 17</code></p>
+          <p>Because <b>17 &lt; 21</b>, A* found a cheaper way to the neighbor. It changes the neighbor's <b>g</b> to 17 and records current as its parent. If the neighbor's <b>h = 8</b>, its new priority is <b>f = 17 + 8 = 25</b>.</p>
+        </div>
+      </section>
+
+      <section class="lesson-section">
+        <h3>5. Why the heuristic matters</h3>
+        <p>The heuristic guides the search. A useful heuristic reduces unnecessary exploration, but it must be trustworthy:</p>
+        <ul>
+          <li><b>h(n) = 0</b> makes A* behave like Dijkstra's algorithm. It remains optimal but usually explores more nodes.</li>
+          <li>An <b>admissible</b> heuristic never overestimates the real remaining cost.</li>
+          <li>A <b>consistent</b> heuristic also obeys the triangle inequality across every edge, so a closed node never needs to be reopened.</li>
+          <li>An overestimating heuristic may search faster, but it can miss the cheapest route.</li>
+        </ul>
+        <p>AStarLab's geometric heuristic is admissible and consistent with its distance-based positive edge costs.</p>
+      </section>
+
+      <section class="lesson-section">
+        <h3>6. When A* is optimal</h3>
+        <p>On a finite graph with non-negative edge costs, A* is complete: it finds a route whenever one exists. With an admissible heuristic—and a consistent heuristic for this closed-set implementation—the returned route has the smallest possible total cost.</p>
+        <p>The final highlighted route is reconstructed from parent links. Those links remember which previous node produced each node's cheapest known <b>g</b>.</p>
+      </section>
+
+      <section class="lesson-section lesson-experiment">
+        <h3>Try it in the lab</h3>
+        <p>Use Slower mode and predict the next node from the visible <b>f</b> values. Then move an obstacle onto the best route and run again. Watch which edges become blocked, which nodes are expanded, and how the final cost changes.</p>
+      </section>
+    </article>
   </dialog>
 </body>
 </html>
