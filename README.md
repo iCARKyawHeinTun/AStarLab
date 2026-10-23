@@ -20,7 +20,7 @@ Use it as a native desktop application or in a browser. The deployed website run
 - Four-part in-app **Learn A*** guide
 - Tools for adding and deleting circular or rectangular obstacles
 - Dark mode by default, with an optional light theme
-- Slow educational playback by default, with an optional normal speed
+- Slow line-by-line educational playback by default, with grouped faster playback
 - Resizable and maximizable window with proportional responsive scaling
 - Final path cost and expanded-node statistics
 - Side-by-side pseudocode that highlights the line currently running

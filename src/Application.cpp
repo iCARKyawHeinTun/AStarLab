@@ -252,7 +252,8 @@ void Application::toggleTheme() {
 
 void Application::toggleSpeed() {
     slowMode_ = !slowMode_;
-    status_ = slowMode_ ? "Slower playback enabled" : "Faster playback enabled";
+    status_ = slowMode_ ? "Slower playback — following every pseudocode line"
+                        : "Faster playback — grouping pseudocode steps";
 }
 
 void Application::togglePseudocode() {
@@ -528,13 +529,35 @@ void Application::update(sf::Time elapsed) {
 
     animationAccumulator_ += elapsed;
     const sf::Time step = animationPhase_ == AnimationPhase::Expanding
-                              ? sf::milliseconds(slowMode_ ? 520 : 150)
+                              ? sf::milliseconds(slowMode_ ? 520 : 220)
                               : sf::milliseconds(slowMode_ ? 360 : 120);
     while (animationAccumulator_ >= step) {
         animationAccumulator_ -= step;
         if (animationPhase_ == AnimationPhase::Expanding) {
             if (animationIndex_ < result_.steps.size()) {
-                applySearchStep(result_.steps[animationIndex_++]);
+                if (slowMode_) {
+                    applySearchStep(result_.steps[animationIndex_++]);
+                } else {
+                    const SearchStep* checkpoint = nullptr;
+                    do {
+                        const SearchStep& trace = result_.steps[animationIndex_++];
+                        applySearchStep(trace);
+                        if (trace.type == SearchStepType::SelectCurrent ||
+                            trace.type == SearchStepType::GoalReached ||
+                            trace.type == SearchStepType::SearchExhausted) {
+                            checkpoint = &trace;
+                        }
+                    } while (animationIndex_ < result_.steps.size() && checkpoint == nullptr);
+
+                    activePseudocodeLine_ = -1;
+                    currentNeighbor_ = -1;
+                    if (checkpoint && checkpoint->type == SearchStepType::SelectCurrent) {
+                        std::ostringstream message;
+                        message << "Exploring node " << checkpoint->currentNode
+                                << "   f=" << checkpoint->score.f;
+                        status_ = message.str();
+                    }
+                }
             } else if (result_.found) {
                 animationPhase_ = AnimationPhase::ShowingPath;
                 animationIndex_ = 0;

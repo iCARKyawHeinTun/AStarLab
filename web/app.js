@@ -134,7 +134,7 @@
     }
   }
 
-  function applyStep(step) {
+  function applyStep(step, present = true) {
     const T = AStarEngine.StepType;
     state.activeLine = step.pseudocodeLine;
     state.neighbor = step.neighborNode;
@@ -143,7 +143,7 @@
     if (step.type === T.SelectCurrent) state.expanded.add(step.currentNode);
     if (step.type === T.UpdateNeighbor) state.scores.set(step.neighborNode, step.score);
     if ([T.BeginLoop, T.GoalReached, T.SearchExhausted].includes(step.type)) state.neighbor = -1;
-    setStatus(describeStep(step)); updatePanel(); render();
+    if (present) { setStatus(describeStep(step)); updatePanel(); render(); }
   }
 
   async function runSearch() {
@@ -153,10 +153,28 @@
     state.currentScore = null; state.neighbor = -1; state.activeLine = -1;
     setRunning(true);
     state.result = state.engine.search(state.nodes, state.edges, 0, 22);
-    for (const step of state.result.steps) {
+    let stepIndex = 0;
+    while (stepIndex < state.result.steps.length) {
       if (token !== state.runToken) return;
-      applyStep(step);
-      await wait(state.slow ? 520 : 150);
+      if (state.slow) {
+        applyStep(state.result.steps[stepIndex++]);
+        await wait(520);
+      } else {
+        let checkpoint = null;
+        do {
+          checkpoint = state.result.steps[stepIndex++];
+          applyStep(checkpoint, false);
+        } while (stepIndex < state.result.steps.length &&
+          ![AStarEngine.StepType.SelectCurrent, AStarEngine.StepType.GoalReached,
+            AStarEngine.StepType.SearchExhausted].includes(checkpoint.type));
+        state.activeLine = -1;
+        state.neighbor = -1;
+        setStatus(checkpoint.type === AStarEngine.StepType.SelectCurrent
+          ? `Exploring node ${checkpoint.currentNode} · f=${checkpoint.score.f}`
+          : describeStep(checkpoint));
+        updatePanel(); render();
+        await wait(220);
+      }
     }
     if (state.result.found) {
       setStatus("Goal reached — tracing the lowest-cost path");
@@ -305,7 +323,8 @@
   });
   elements["speed-button"].addEventListener("click", () => {
     state.slow = !state.slow; elements["speed-button"].textContent = state.slow ? "Faster" : "Slower";
-    setStatus(state.slow ? "Slower playback enabled" : "Faster playback enabled");
+    setStatus(state.slow ? "Slower playback — following every pseudocode line"
+      : "Faster playback — grouping pseudocode steps");
   });
   elements["code-button"].addEventListener("click", () => {
     state.codeVisible = !state.codeVisible;
