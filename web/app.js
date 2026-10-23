@@ -311,6 +311,8 @@
     state.codeVisible = !state.codeVisible;
     elements.workspace.classList.toggle("code-hidden", !state.codeVisible);
     elements["algorithm-panel"].hidden = !state.codeVisible;
+    elements["algorithm-panel"].style.display = state.codeVisible ? "" : "none";
+    elements.workspace.style.gridTemplateColumns = state.codeVisible ? "" : "minmax(0, 1fr)";
     elements["code-button"].textContent = state.codeVisible ? "Hide code" : "Show code";
     elements["code-button"].setAttribute("aria-pressed", String(state.codeVisible));
     setStatus(state.codeVisible ? "Synchronized pseudocode visible" : "Synchronized pseudocode hidden");
