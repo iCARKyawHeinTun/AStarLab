@@ -11,6 +11,7 @@
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 
 namespace {
 sf::Color Background{29, 31, 35};
@@ -27,6 +28,10 @@ sf::Color Obstacle{137, 108, 77};
 sf::Color ObstacleBorder{218, 164, 99};
 sf::Color Text{239, 241, 244};
 sf::Color Muted{174, 181, 191};
+sf::Color SyntaxKeyword{199, 160, 236};
+sf::Color SyntaxFunction{120, 200, 232};
+sf::Color SyntaxVariable{231, 201, 128};
+sf::Color SyntaxOperator{180, 187, 197};
 
 void applyTheme(bool dark) {
     if (dark) {
@@ -44,6 +49,10 @@ void applyTheme(bool dark) {
         ObstacleBorder = {218, 164, 99};
         Text = {239, 241, 244};
         Muted = {174, 181, 191};
+        SyntaxKeyword = {199, 160, 236};
+        SyntaxFunction = {120, 200, 232};
+        SyntaxVariable = {231, 201, 128};
+        SyntaxOperator = {180, 187, 197};
         return;
     }
 
@@ -61,6 +70,10 @@ void applyTheme(bool dark) {
     ObstacleBorder = {194, 127, 55};
     Text = {39, 50, 66};
     Muted = {103, 116, 134};
+    SyntaxKeyword = {123, 69, 166};
+    SyntaxFunction = {23, 108, 145};
+    SyntaxVariable = {136, 92, 8};
+    SyntaxOperator = {89, 101, 117};
 }
 
 using Glyph = std::array<std::string_view, 7>;
@@ -772,16 +785,40 @@ void Application::drawSidebar() {
         drawText("A* pseudocode", {left, 180.f}, 2.1f, Text, true);
         drawText("The active line follows the search", {left, 211.f}, 1.05f, Muted);
 
-        const std::array<std::string, 9> pseudocode{{
-            "1  open = { start }",
-            "2  while open is not empty:",
-            "3      current = popLowestF(open)",
-            "4      if current == goal:",
-            "5          return path(current)",
-            "6      for next in neighbors(current):",
-            "7          newG = g[current] + edgeCost",
-            "8          if newG < g[next]:",
-            "9              update(next, newG, current)",
+        struct CodeToken {
+            std::string text;
+            sf::Color color;
+            bool bold{false};
+        };
+        struct CodeLine {
+            int indent{};
+            std::vector<CodeToken> tokens;
+        };
+        const auto token = [](std::string text, sf::Color color, bool bold = false) {
+            return CodeToken{std::move(text), color, bold};
+        };
+        const std::array<CodeLine, 9> pseudocode{{
+            {0, {token("openSet", SyntaxVariable), token(" = ", SyntaxOperator),
+                 token("PriorityQueue", SyntaxFunction), token("({ ", Text),
+                 token("start", SyntaxVariable), token(" })", Text)}},
+            {0, {token("while not", SyntaxKeyword, true), token(" openSet.", Text),
+                 token("empty", SyntaxFunction), token("():", Text)}},
+            {1, {token("current", SyntaxVariable), token(" = ", SyntaxOperator),
+                 token("openSet.", Text), token("popLowestF", SyntaxFunction), token("()", Text)}},
+            {1, {token("if", SyntaxKeyword, true), token(" current ", SyntaxVariable),
+                 token("==", SyntaxOperator), token(" goal:", SyntaxVariable)}},
+            {2, {token("return", SyntaxKeyword, true), token(" reconstructPath", SyntaxFunction),
+                 token("(current)", SyntaxVariable)}},
+            {1, {token("for", SyntaxKeyword, true), token(" neighbor ", SyntaxVariable),
+                 token("in", SyntaxKeyword, true), token(" neighbors", SyntaxFunction),
+                 token("(current):", SyntaxVariable)}},
+            {2, {token("tentativeG", SyntaxVariable), token(" = ", SyntaxOperator),
+                 token("g[current] ", SyntaxVariable), token("+", SyntaxOperator),
+                 token(" cost", SyntaxFunction), token("(current, neighbor)", SyntaxVariable)}},
+            {2, {token("if", SyntaxKeyword, true), token(" tentativeG ", SyntaxVariable),
+                 token("<", SyntaxOperator), token(" g[neighbor]:", SyntaxVariable)}},
+            {3, {token("updateScoresAndParent", SyntaxFunction),
+                 token("(neighbor, tentativeG)", SyntaxVariable)}},
         }};
         float lineTop = 237.f;
         for (std::size_t index = 0; index < pseudocode.size(); ++index) {
@@ -789,11 +826,32 @@ void Application::drawSidebar() {
             if (active) {
                 sf::RectangleShape highlight({255.f, 28.f});
                 highlight.setPosition({left, lineTop - 4.f});
-                highlight.setFillColor(Expanded);
+                highlight.setFillColor({Expanded.r, Expanded.g, Expanded.b, 76});
                 window_.draw(highlight);
             }
-            drawText(pseudocode[index], {left + 8.f, lineTop}, 1.05f,
-                     active ? Panel : Text, active);
+
+            sf::RectangleShape gutter({1.f, 28.f});
+            gutter.setPosition({left + 30.f, lineTop - 4.f});
+            gutter.setFillColor(Edge);
+            window_.draw(gutter);
+            drawText(std::to_string(index + 1), {left + 12.f, lineTop}, 1.05f,
+                     active ? Text : Edge, active);
+
+            constexpr float HorizontalScale = 0.72f;
+            float tokenLeft = left + 40.f + static_cast<float>(pseudocode[index].indent) * 12.f;
+            for (const auto& codeToken : pseudocode[index].tokens) {
+                sf::Text label(font_, codeToken.text, 10);
+                label.setPosition({tokenLeft, lineTop});
+                label.setFillColor(codeToken.color);
+                label.setScale({HorizontalScale, 1.f});
+                if (codeToken.bold) label.setStyle(sf::Text::Bold);
+                window_.draw(label);
+                const auto& glyphs = label.getShapedGlyphs();
+                if (!glyphs.empty()) {
+                    const auto& lastGlyph = glyphs.back();
+                    tokenLeft += (lastGlyph.position.x + lastGlyph.glyph.advance) * HorizontalScale;
+                }
+            }
             lineTop += 31.f;
         }
     } else {
