@@ -31,7 +31,25 @@
 
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  let pendingDelay = null;
+  const wait = ms => new Promise(resolve => {
+    const delay = {
+      timer: null,
+      finish: () => {
+        if (pendingDelay === delay) pendingDelay = null;
+        resolve();
+      },
+    };
+    delay.timer = setTimeout(delay.finish, ms);
+    pendingDelay = delay;
+  });
+  function interruptDelay() {
+    if (!pendingDelay) return;
+    const delay = pendingDelay;
+    pendingDelay = null;
+    clearTimeout(delay.timer);
+    delay.finish();
+  }
 
   function buildRoadmap(randomized = false) {
     state.nodes = basePositions.map(([x, y], id) => ({
@@ -86,6 +104,7 @@
 
   function resetVisualization(message) {
     state.runToken++;
+    interruptDelay();
     state.result = null;
     state.scores.clear(); state.expanded.clear(); state.visiblePath.clear();
     state.currentScore = null; state.neighbor = -1; state.activeLine = -1;
@@ -173,7 +192,7 @@
           ? `Exploring node ${checkpoint.currentNode} · f=${checkpoint.score.f}`
           : describeStep(checkpoint));
         updatePanel(); render();
-        await wait(220);
+        await wait(75);
       }
     }
     if (state.result.found) {
@@ -181,7 +200,7 @@
       for (const node of state.result.path) {
         if (token !== state.runToken) return;
         state.visiblePath.add(node); render();
-        await wait(state.slow ? 360 : 120);
+        await wait(state.slow ? 360 : 45);
       }
       setStatus(`Best path: cost ${state.result.cost} · explored ${state.expanded.size} nodes`);
     } else setStatus("No path — the obstacles disconnected the graph");
@@ -323,6 +342,8 @@
   });
   elements["speed-button"].addEventListener("click", () => {
     state.slow = !state.slow; elements["speed-button"].textContent = state.slow ? "Faster" : "Slower";
+    elements["speed-button"].setAttribute("aria-pressed", String(!state.slow));
+    interruptDelay();
     setStatus(state.slow ? "Slower playback — following every pseudocode line"
       : "Faster playback — grouping pseudocode steps");
   });
