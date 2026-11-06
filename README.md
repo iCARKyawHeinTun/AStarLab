@@ -4,6 +4,8 @@ AStarLab is an interactive, educational A* visualizer written in modern C++ with
 
 Use it as a native desktop application or in a browser. The deployed website runs the same C++ graph and A* search engine through WebAssembly, while retaining a JavaScript fallback for local development.
 
+**▶ Try it in your browser: [icarkyawheintun.github.io/AStarLab](https://icarkyawheintun.github.io/AStarLab/)** (no install needed)
+
 ## Preview
 
 ![AStarLab visualizing the A* search algorithm](docs/astartlab-preview.png)
