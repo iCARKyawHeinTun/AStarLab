@@ -20,5 +20,5 @@ target_link_options(astar-core PRIVATE
     "-sENVIRONMENT=web"
     "-sALLOW_MEMORY_GROWTH=1"
     "-sEXPORTED_RUNTIME_METHODS=['ccall']"
-    "-sEXPORTED_FUNCTIONS=['_reset_graph','_add_node','_add_edge','_run_search','_result_found','_result_cost','_result_expanded_count','_result_path_count','_result_path_node','_result_step_count','_step_type','_step_line','_step_current','_step_neighbor','_step_edge_cost','_step_tentative_g','_step_previous_g','_step_improved','_step_score_node','_step_score_g','_step_score_h','_step_score_f']"
+    "-sEXPORTED_FUNCTIONS=['_reset_graph','_add_node','_add_edge','_run_search','_run_search_strategy','_result_found','_result_cost','_result_expanded_count','_result_path_count','_result_path_node','_result_step_count','_step_type','_step_line','_step_current','_step_neighbor','_step_edge_cost','_step_tentative_g','_step_previous_g','_step_improved','_step_score_node','_step_score_g','_step_score_h','_step_score_f']"
 )

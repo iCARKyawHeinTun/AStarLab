@@ -105,16 +105,25 @@
   }
 
   class WasmEngine {
-    constructor(module) { this.module = module; this.kind = "Shared C++ core · WebAssembly"; }
+    constructor(module) {
+      this.module = module;
+      this.kind = "Shared C++ core · WebAssembly";
+      this.supportsStrategies = typeof module._run_search_strategy === "function";
+    }
     call(name, returnType = "number", args = [], values = []) {
       return this.module.ccall(name, returnType, args, values);
     }
-    search(nodes, edges, start, goal) {
+    search(nodes, edges, start, goal, strategy = "astar") {
       this.call("reset_graph", null);
       nodes.forEach(node => this.call("add_node", "number", ["number", "number"], [node.x, node.y]));
       edges.forEach(edge => this.call("add_edge", null,
         ["number", "number", "number", "number"], [edge.from, edge.to, edge.cost, edge.enabled ? 1 : 0]));
-      this.call("run_search", null, ["number", "number"], [start, goal]);
+      const strategyIndex = ["astar", "dijkstra", "greedy", "weighted"].indexOf(strategy);
+      if (this.supportsStrategies) {
+        this.call("run_search_strategy", null, ["number", "number", "number"], [start, goal, Math.max(0, strategyIndex)]);
+      } else {
+        this.call("run_search", null, ["number", "number"], [start, goal]);
+      }
       const count = this.call("result_step_count");
       const steps = [];
       for (let index = 0; index < count; index++) {

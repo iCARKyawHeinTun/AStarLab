@@ -27,6 +27,11 @@ ASTARLAB_EXPORT void add_edge(int from, int to, int cost, int enabled) {
     graph.edges().back().enabled = enabled != 0;
 }
 ASTARLAB_EXPORT void run_search(int start, int goal) { result = AStar{}.search(graph, start, goal); }
+// 0 = A*, 1 = Dijkstra, 2 = Greedy, 3 = Weighted A* (same order as SearchStrategy).
+ASTARLAB_EXPORT void run_search_strategy(int start, int goal, int strategy) {
+    const int clamped = strategy < 0 || strategy > 3 ? 0 : strategy;
+    result = AStar{}.search(graph, start, goal, static_cast<SearchStrategy>(clamped));
+}
 ASTARLAB_EXPORT int result_found() { return result.found ? 1 : 0; }
 ASTARLAB_EXPORT int result_cost() { return result.cost; }
 ASTARLAB_EXPORT int result_expanded_count() { return static_cast<int>(result.expanded.size()); }

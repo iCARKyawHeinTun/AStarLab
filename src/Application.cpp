@@ -12,6 +12,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace {
 sf::Color Background{29, 31, 35};
@@ -32,6 +33,7 @@ sf::Color SyntaxKeyword{199, 160, 236};
 sf::Color SyntaxFunction{120, 200, 232};
 sf::Color SyntaxVariable{231, 201, 128};
 sf::Color SyntaxOperator{180, 187, 197};
+sf::Color OpenRing{240, 195, 90};
 
 void applyTheme(bool dark) {
     if (dark) {
@@ -53,6 +55,7 @@ void applyTheme(bool dark) {
         SyntaxFunction = {120, 200, 232};
         SyntaxVariable = {231, 201, 128};
         SyntaxOperator = {180, 187, 197};
+        OpenRing = {240, 195, 90};
         return;
     }
 
@@ -74,6 +77,7 @@ void applyTheme(bool dark) {
     SyntaxFunction = {23, 108, 145};
     SyntaxVariable = {136, 92, 8};
     SyntaxOperator = {89, 101, 117};
+    OpenRing = {183, 121, 31};
 }
 
 using Glyph = std::array<std::string_view, 7>;
@@ -139,28 +143,75 @@ float distance(sf::Vector2f first, sf::Vector2f second) {
 }
 } // namespace
 
+namespace {
+constexpr std::array<SearchStrategy, 4> AllStrategies{
+    SearchStrategy::AStar, SearchStrategy::Dijkstra, SearchStrategy::Greedy,
+    SearchStrategy::WeightedAStar,
+};
+constexpr std::array<int, 5> LineDelayMs{1100, 650, 380, 180, 60};
+constexpr std::array<int, 5> NodeDelayMs{1600, 1000, 600, 300, 120};
+
+struct ChallengeText {
+    const char* title;
+    const char* task;
+};
+constexpr std::array<ChallengeText, 5> Challenges{{
+    {"Detour", "Make the best path cost at least 20 more than with no obstacles at all."},
+    {"One obstacle is enough", "With exactly ONE obstacle on the board, make the goal unreachable."},
+    {"Greedy's mistake", "Make Greedy pay at least 15 more than A* for its path."},
+    {"The heuristic pays off", "Make Dijkstra close at least twice as many nodes as A*."},
+    {"Make A* sweat", "Keep a path, but make A* close at least 21 nodes."},
+}};
+
+const char* popName(SearchStrategy strategy) {
+    switch (strategy) {
+    case SearchStrategy::Dijkstra: return "popLowestG";
+    case SearchStrategy::Greedy: return "popLowestH";
+    default: return "popLowestF";
+    }
+}
+
+std::string infinityOr(int value) { return value < 0 ? "infinity" : std::to_string(value); }
+
+bool modifierDown(sf::Keyboard::Key left, sf::Keyboard::Key right) {
+    return sf::Keyboard::isKeyPressed(left) || sf::Keyboard::isKeyPressed(right);
+}
+} // namespace
+
 Application::Application()
     : window_(sf::VideoMode({WindowWidth, WindowHeight}), "AStarLab",
               sf::Style::Titlebar | sf::Style::Resize | sf::Style::Close),
       randomEngine_(static_cast<unsigned>(
-          std::chrono::steady_clock::now().time_since_epoch().count())),
-      buttons_{{
-          {{{42.f, 70.f}, {130.f, 40.f}}, "Run", Start},
-          {{{184.f, 70.f}, {145.f, 40.f}}, "Random", Path},
-          {{{341.f, 70.f}, {130.f, 40.f}}, "Obstacles", ObstacleBorder},
-          {{{483.f, 70.f}, {110.f, 40.f}}, "Learn A*", Expanded},
-      }} {
+          std::chrono::steady_clock::now().time_since_epoch().count())) {
     if (!font_.openFromFile(ASTARLAB_FONT_PATH)) {
         throw std::runtime_error("Could not load the bundled Inter font");
     }
+    // Row 1: playback and the main learning tools. Row 2: small utilities.
+    buttons_ = {
+        {ButtonId::Play, {{42.f, 70.f}, {104.f, 40.f}}, false},
+        {ButtonId::Back, {{154.f, 70.f}, {72.f, 40.f}}, false},
+        {ButtonId::Step, {{234.f, 70.f}, {88.f, 40.f}}, false},
+        {ButtonId::Finish, {{330.f, 70.f}, {84.f, 40.f}}, false},
+        {ButtonId::Strategy, {{432.f, 70.f}, {196.f, 40.f}}, false},
+        {ButtonId::Predict, {{636.f, 70.f}, {150.f, 40.f}}, false},
+        {ButtonId::Obstacles, {{794.f, 70.f}, {124.f, 40.f}}, false},
+        {ButtonId::Learn, {{926.f, 70.f}, {110.f, 40.f}}, false},
+        {ButtonId::Challenges, {{1044.f, 70.f}, {196.f, 40.f}}, false},
+        {ButtonId::Reset, {{760.f, 124.f}, {66.f, 30.f}}, true},
+        {ButtonId::Theme, {{834.f, 124.f}, {64.f, 30.f}}, true},
+        {ButtonId::Speed, {{906.f, 124.f}, {88.f, 30.f}}, true},
+        {ButtonId::StepBy, {{1002.f, 124.f}, {120.f, 30.f}}, true},
+        {ButtonId::Code, {{1130.f, 124.f}, {110.f, 30.f}}, true},
+    };
     window_.setFramerateLimit(120);
     window_.setMinimumSize(sf::Vector2u{960, 645});
     updateResponsiveView(window_.getSize());
-    buildRoadmap(false);
     initialCircles_ = {{{380.f, 270.f}, 58.f}, {{690.f, 155.f}, 45.f}};
     initialRectangles_ = {{{545.f, 370.f}, {125.f, 82.f}}};
     resetScene();
 }
+
+// ===================================================================== scene
 
 void Application::buildRoadmap(bool randomized) {
     graph_.clear();
@@ -203,116 +254,44 @@ void Application::randomizeRoadmap() {
     obstacleTool_ = ObstacleTool::Move;
     obstacleMenuOpen_ = false;
     recomputeEdgeAvailability();
-    clearSearch("New nodes and edge costs generated — run the search");
+    invalidate("New node positions and edge costs. Press Play or Step.");
 }
 
 void Application::resetScene() {
     buildRoadmap(false);
     circles_ = initialCircles_;
     rectangles_ = initialRectangles_;
+    startNode_ = 0;
+    goalNode_ = 22;
     obstacleTool_ = ObstacleTool::Move;
     obstacleMenuOpen_ = false;
     recomputeEdgeAvailability();
-    clearSearch("Ready — move an obstacle or run the search");
+    invalidate("Ready. Press Play, or Step through the search one line at a time.");
 }
 
 void Application::recomputeEdgeAvailability() {
     for (auto& edge : graph_.edges()) edge.enabled = !edgeIntersectsObstacle(edge);
 }
 
-void Application::clearSearch(const std::string& status) {
-    result_ = {};
-    expandedNodes_.clear();
-    visiblePathNodes_.clear();
-    scores_.clear();
-    currentScore_.reset();
-    currentNeighbor_ = -1;
-    activePseudocodeLine_ = -1;
-    animationIndex_ = 0;
-    animationAccumulator_ = sf::Time::Zero;
-    animationPhase_ = AnimationPhase::Idle;
-    status_ = status;
-}
-
-void Application::startSearch() {
-    clearSearch("A* is choosing the node with the lowest f score");
-    dragKind_ = DragKind::None;
-    obstacleMenuOpen_ = false;
-    result_ = astar_.search(graph_, startNode_, goalNode_);
-    animationPhase_ = AnimationPhase::Expanding;
-}
-
-void Application::cancelSearch() {
-    dragKind_ = DragKind::None;
-    obstacleMenuOpen_ = false;
-    clearSearch("Simulation canceled — obstacles are unlocked");
-}
-
-bool Application::isSimulationRunning() const {
-    return animationPhase_ == AnimationPhase::Expanding ||
-           animationPhase_ == AnimationPhase::ShowingPath;
-}
-
-void Application::toggleTheme() {
-    darkMode_ = !darkMode_;
-    applyTheme(darkMode_);
-    buttons_[0].accent = Start;
-    buttons_[1].accent = Path;
-    buttons_[2].accent = ObstacleBorder;
-    buttons_[3].accent = Expanded;
-    status_ = darkMode_ ? "Dark mode enabled" : "Light mode enabled";
-}
-
-void Application::toggleSpeed() {
-    slowMode_ = !slowMode_;
-    status_ = slowMode_ ? "Slower playback — following every pseudocode line"
-                        : "Faster playback — grouping pseudocode steps";
-}
-
-void Application::togglePseudocode() {
-    showPseudocode_ = !showPseudocode_;
-    status_ = showPseudocode_ ? "Synchronized pseudocode visible"
-                              : "Synchronized pseudocode hidden";
-}
-
-void Application::toggleLearningView() {
-    learningView_ = !learningView_;
-    obstacleMenuOpen_ = false;
-    buttons_[3].label = learningView_ ? "Back to lab" : "Learn A*";
-    status_ = learningView_ ? "A* from the ground up" : "Back in the interactive lab";
-}
-
 void Application::addObstacleAt(sf::Vector2f local) {
     local.x = std::clamp(local.x, 30.f, CanvasWidth - 30.f);
     local.y = std::clamp(local.y, 30.f, CanvasHeight - 30.f);
-    if (obstacleTool_ == ObstacleTool::AddCircle) {
-        circles_.push_back({local, 42.f});
-        status_ = "Circle added — drag it or run the search";
-    } else if (obstacleTool_ == ObstacleTool::AddRectangle) {
-        rectangles_.push_back({local - sf::Vector2f{52.f, 36.f}, {104.f, 72.f}});
-        status_ = "Rectangle added — drag it or run the search";
-    } else {
-        return;
-    }
-    recomputeEdgeAvailability();
-    result_ = {};
-    expandedNodes_.clear();
-    visiblePathNodes_.clear();
-    scores_.clear();
-    currentScore_.reset();
-    currentNeighbor_ = -1;
-    activePseudocodeLine_ = -1;
-    animationPhase_ = AnimationPhase::Idle;
+    const bool circle = obstacleTool_ == ObstacleTool::AddCircle;
+    if (circle) circles_.push_back({local, 42.f});
+    else rectangles_.push_back({local - sf::Vector2f{52.f, 36.f}, {104.f, 72.f}});
     obstacleTool_ = ObstacleTool::Move;
+    recomputeEdgeAvailability();
+    invalidate(circle ? "Circle added. Drag it around, then run the search."
+                      : "Rectangle added. Drag it around, then run the search.");
 }
 
 bool Application::deleteObstacleAt(sf::Vector2f local) {
     for (std::size_t index = circles_.size(); index > 0; --index) {
         if (distance(local, circles_[index - 1].center) <= circles_[index - 1].radius) {
             circles_.erase(circles_.begin() + static_cast<std::ptrdiff_t>(index - 1));
-            recomputeEdgeAvailability();
-            clearSearch("Obstacle deleted — run the search again");
             obstacleTool_ = ObstacleTool::Move;
+            recomputeEdgeAvailability();
+            invalidate("Obstacle deleted. The search starts over.");
             return true;
         }
     }
@@ -320,14 +299,435 @@ bool Application::deleteObstacleAt(sf::Vector2f local) {
         const sf::FloatRect bounds(rectangles_[index - 1].position, rectangles_[index - 1].size);
         if (bounds.contains(local)) {
             rectangles_.erase(rectangles_.begin() + static_cast<std::ptrdiff_t>(index - 1));
-            recomputeEdgeAvailability();
-            clearSearch("Obstacle deleted — run the search again");
             obstacleTool_ = ObstacleTool::Move;
+            recomputeEdgeAvailability();
+            invalidate("Obstacle deleted. The search starts over.");
             return true;
         }
     }
     return false;
 }
+
+// ===================================================================== playback
+
+void Application::invalidate(const std::string& status) {
+    pause();
+    result_.reset();
+    position_ = -1;
+    awaiting_ = false;
+    answered_ = false;
+    tries_ = 0;
+    comparison_.clear();
+    derive();
+    status_ = status;
+    evaluateChallenges();
+}
+
+void Application::ensureResult() {
+    if (!result_) result_ = astar_.search(graph_, startNode_, goalNode_, strategy_);
+}
+
+/// Rebuild everything shown on screen by replaying steps 0..position_.
+/// A run has a few hundred steps, so this is instant, and it makes "step back" trivial.
+void Application::derive() {
+    openSet_.clear();
+    closedNodes_.clear();
+    closedScores_.clear();
+    currentScore_.reset();
+    currentNeighbor_ = -1;
+    activePseudocodeLine_ = -1;
+    lastStep_.reset();
+    if (!result_) return;
+    int sequence = 0;
+    for (int index = 0; index <= position_; ++index) {
+        const SearchStep& step = result_->steps[static_cast<std::size_t>(index)];
+        activePseudocodeLine_ = step.pseudocodeLine;
+        currentNeighbor_ = step.neighborNode;
+        lastStep_ = step;
+        switch (step.type) {
+        case SearchStepType::Initialize:
+            openSet_[step.currentNode] = {step.score, sequence++};
+            currentScore_ = step.score;
+            break;
+        case SearchStepType::SelectCurrent:
+            openSet_.erase(step.currentNode);
+            closedNodes_.insert(step.currentNode);
+            closedScores_[step.currentNode] = step.score;
+            currentScore_ = step.score;
+            break;
+        case SearchStepType::CheckGoal:
+            currentScore_ = step.score;
+            break;
+        case SearchStepType::UpdateNeighbor:
+            openSet_[step.neighborNode] = {step.score, sequence++};
+            break;
+        case SearchStepType::BeginLoop:
+        case SearchStepType::GoalReached:
+        case SearchStepType::SearchExhausted:
+            currentNeighbor_ = -1;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+bool Application::atEnd() const {
+    return result_ && position_ >= static_cast<int>(result_->steps.size()) - 1;
+}
+
+/// One press of "Step". Returns false when it stopped to ask for a prediction or reached the end.
+bool Application::stepForward() {
+    ensureResult();
+    if (atEnd()) return false;
+    for (;;) {
+        if (atEnd()) break;
+        const SearchStep& next = result_->steps[static_cast<std::size_t>(position_ + 1)];
+        if (next.type == SearchStepType::SelectCurrent && predict_ && !answered_ && !openSet_.empty()) {
+            ask();
+            return false;
+        }
+        ++position_;
+        if (next.type == SearchStepType::SelectCurrent) answered_ = false;
+        derive();
+        if (!stepByNode_ || next.type == SearchStepType::SelectCurrent ||
+            next.type == SearchStepType::GoalReached || next.type == SearchStepType::SearchExhausted) {
+            break;
+        }
+    }
+    present();
+    return !atEnd();
+}
+
+void Application::stepBack() {
+    if (!result_ || position_ < 0) return;
+    pause();
+    awaiting_ = false;
+    answered_ = false;
+    if (!stepByNode_) {
+        --position_;
+    } else {
+        int index = position_ - 1;
+        while (index >= 0 && result_->steps[static_cast<std::size_t>(index)].type !=
+                                 SearchStepType::SelectCurrent) {
+            --index;
+        }
+        position_ = index;
+    }
+    derive();
+    present();
+}
+
+void Application::restartPlayback() {
+    ensureResult();
+    pause();
+    position_ = -1;
+    awaiting_ = false;
+    answered_ = false;
+    derive();
+    status_ = "Back at the start. Press Step or Play.";
+}
+
+void Application::finishPlayback() {
+    ensureResult();
+    pause();
+    awaiting_ = false;
+    position_ = static_cast<int>(result_->steps.size()) - 1;
+    derive();
+    present();
+}
+
+void Application::play() {
+    ensureResult();
+    if (atEnd()) {
+        position_ = -1;
+        derive();
+    }
+    if (awaiting_) return;
+    playing_ = true;
+    playAccumulator_ = sf::milliseconds(100000); // take the first step right away
+}
+
+void Application::pause() {
+    playing_ = false;
+    playAccumulator_ = sf::Time::Zero;
+}
+
+void Application::update(sf::Time elapsed) {
+    if (learningView_ || !playing_) return;
+    playAccumulator_ += elapsed;
+    const auto& delays = stepByNode_ ? NodeDelayMs : LineDelayMs;
+    const sf::Time delay = sf::milliseconds(delays[static_cast<std::size_t>(speed_ - 1)]);
+    if (playAccumulator_ < delay) return;
+    playAccumulator_ = sf::Time::Zero;
+    const bool more = stepForward();
+    if (awaiting_) {
+        resumeAfterAnswer_ = true;
+        pause();
+        return;
+    }
+    if (!more) pause();
+}
+
+void Application::present() {
+    if (atEnd()) {
+        std::ostringstream message;
+        if (result_->found) {
+            message << "Done. " << strategyName(strategy_) << " found a path of cost " << result_->cost
+                    << " and closed " << closedNodes_.size() << " nodes.";
+            if (predict_ && predictTotal_ > 0) {
+                message << "   Predictions: " << predictRight_ << "/" << predictTotal_ << " first try.";
+            }
+        } else {
+            message << "Done. The obstacles disconnected the graph, so there is no path.";
+        }
+        status_ = message.str();
+        computeComparison();
+    } else if (lastStep_) {
+        status_ = describeStep(*lastStep_);
+    }
+}
+
+std::string Application::describeStep(const SearchStep& step) const {
+    std::ostringstream message;
+    switch (step.type) {
+    case SearchStepType::Initialize:
+        message << "Start: put node " << step.currentNode << " in the open set with g = 0.";
+        break;
+    case SearchStepType::BeginLoop:
+        message << "The open set isn't empty, so keep searching.";
+        break;
+    case SearchStepType::SelectCurrent:
+        message << "Take out node " << step.currentNode << ": it has the lowest " << priorityName()
+                << " in the open set (" << step.score.f << "). Close it.";
+        break;
+    case SearchStepType::CheckGoal:
+        message << "Is node " << step.currentNode << " the goal? " << (step.improved ? "Yes!" : "No.");
+        break;
+    case SearchStepType::InspectNeighbor:
+        message << "Look at neighbor " << step.neighborNode << " (edge cost " << step.edgeCost << ").";
+        break;
+    case SearchStepType::CalculateTentative:
+        message << "Through node " << step.currentNode << ", reaching " << step.neighborNode
+                << " costs g = " << step.score.g << " + " << step.edgeCost << " = " << step.tentativeG << ".";
+        break;
+    case SearchStepType::CompareCost:
+        if (step.improved) {
+            message << step.tentativeG << " < " << infinityOr(step.previousG)
+                    << (step.previousG < 0 ? " (never reached before)" : "") << ": this route is better.";
+        } else {
+            message << step.tentativeG << " is not cheaper than the known " << step.previousG
+                    << ". Keep the old route.";
+        }
+        break;
+    case SearchStepType::UpdateNeighbor:
+        message << "Update node " << step.neighborNode << ": g = " << step.score.g << ", h = "
+                << step.score.h << ", " << priorityName() << " = " << step.score.f
+                << ". Parent = " << step.currentNode << ".";
+        break;
+    case SearchStepType::GoalReached:
+        message << "Goal reached! Follow the parent links back to the start to get the path.";
+        break;
+    case SearchStepType::SearchExhausted:
+        message << "The open set is empty: there is no path to the goal.";
+        break;
+    }
+    return message.str();
+}
+
+std::vector<std::pair<int, Application::OpenEntry>> Application::sortedOpenSet() const {
+    std::vector<std::pair<int, OpenEntry>> entries(openSet_.begin(), openSet_.end());
+    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+        if (a.second.score.f != b.second.score.f) return a.second.score.f < b.second.score.f;
+        return a.second.sequence < b.second.sequence;
+    });
+    return entries;
+}
+
+void Application::computeComparison() {
+    comparison_.clear();
+    for (const auto strategy : AllStrategies) {
+        const auto result = astar_.search(graph_, startNode_, goalNode_, strategy);
+        comparison_.push_back({strategy, result.found, result.cost, static_cast<int>(result.expanded.size())});
+    }
+}
+
+// ===================================================================== predict mode
+
+void Application::ask() {
+    awaiting_ = true;
+    status_ = std::string("Your turn: which open node (amber ring) will ") + popName(strategy_) +
+              "() take out next? Click it.";
+}
+
+void Application::answer(int nodeId) {
+    const auto open = sortedOpenSet();
+    if (open.empty()) return;
+    const int best = open.front().second.score.f;
+    const auto chosen = openSet_.find(nodeId);
+    if (chosen == openSet_.end()) {
+        status_ = "Node " + std::to_string(nodeId) + " isn't in the open set. Only amber-ringed nodes can come out next.";
+        return;
+    }
+    const int expected = result_->steps[static_cast<std::size_t>(position_ + 1)].currentNode;
+    std::ostringstream message;
+    if (chosen->second.score.f == best) {
+        ++predictTotal_;
+        if (tries_ == 0) ++predictRight_;
+        message << "Right: node " << nodeId << " has the lowest " << priorityName() << " (" << best << ").";
+        if (nodeId != expected) {
+            message << " It's a tie; node " << expected << " goes first because it entered the open set earlier.";
+        }
+        finishAnswer(message.str());
+        return;
+    }
+    ++tries_;
+    if (tries_ >= 2) {
+        ++predictTotal_;
+        message << "Not node " << nodeId << " (" << priorityName() << " = " << chosen->second.score.f
+                << "). The answer is node " << expected << ", with the lowest " << priorityName() << " = " << best << ".";
+        finishAnswer(message.str());
+        return;
+    }
+    message << "Not node " << nodeId << ": its " << priorityName() << " = " << chosen->second.score.f
+            << ". Compare the values of all amber nodes. Which is smallest? Try again.";
+    status_ = message.str();
+}
+
+void Application::finishAnswer(const std::string& message) {
+    awaiting_ = false;
+    answered_ = true;
+    tries_ = 0;
+    stepForward();
+    status_ = message + "   Predictions: " + std::to_string(predictRight_) + "/" +
+              std::to_string(predictTotal_) + " first try.";
+    if (resumeAfterAnswer_) {
+        resumeAfterAnswer_ = false;
+        if (!atEnd()) {
+            playing_ = true;
+            playAccumulator_ = sf::Time::Zero;
+        }
+    }
+}
+
+// ===================================================================== challenges
+
+void Application::evaluateChallenges() {
+    const auto run = [this](SearchStrategy strategy) { return astar_.search(graph_, startNode_, goalNode_, strategy); };
+    const auto astarResult = run(SearchStrategy::AStar);
+    const auto greedy = run(SearchStrategy::Greedy);
+    const auto dijkstra = run(SearchStrategy::Dijkstra);
+    Graph open = graph_;
+    for (auto& edge : open.edges()) edge.enabled = true;
+    const auto free = astar_.search(open, startNode_, goalNode_);
+    const int closedA = static_cast<int>(astarResult.expanded.size());
+    const int closedD = static_cast<int>(dijkstra.expanded.size());
+
+    challengeStatus_[0] = {astarResult.found && astarResult.cost >= free.cost + 20,
+                           astarResult.found ? "cost " + std::to_string(astarResult.cost) + ", needs " +
+                                                   std::to_string(free.cost + 20) + "+"
+                                             : "no path at all"};
+    challengeStatus_[1] = {obstacleCount() == 1 && !astarResult.found,
+                           std::to_string(obstacleCount()) + " obstacle(s), goal " +
+                               (astarResult.found ? "reachable" : "unreachable")};
+    challengeStatus_[2] = {astarResult.found && greedy.found && greedy.cost >= astarResult.cost + 15,
+                           astarResult.found ? "Greedy " + std::to_string(greedy.cost) + " vs A* " +
+                                                   std::to_string(astarResult.cost)
+                                             : "no path"};
+    challengeStatus_[3] = {astarResult.found && closedD >= 2 * closedA,
+                           astarResult.found ? "Dijkstra " + std::to_string(closedD) + " vs A* " +
+                                                   std::to_string(closedA)
+                                             : "no path"};
+    challengeStatus_[4] = {astarResult.found && closedA >= 21,
+                           astarResult.found ? "A* closed " + std::to_string(closedA) : "no path"};
+    for (int index = 0; index < ChallengeCount; ++index) {
+        if (challengeStatus_[static_cast<std::size_t>(index)].solved) challengesDone_[static_cast<std::size_t>(index)] = true;
+    }
+}
+
+// ===================================================================== toggles
+
+void Application::toggleTheme() {
+    darkMode_ = !darkMode_;
+    applyTheme(darkMode_);
+    status_ = darkMode_ ? "Dark mode" : "Light mode";
+}
+
+void Application::cycleSpeed() {
+    speed_ = speed_ % 5 + 1;
+    status_ = "Playback speed " + std::to_string(speed_) + " of 5";
+}
+
+void Application::toggleStepBy() {
+    stepByNode_ = !stepByNode_;
+    status_ = stepByNode_ ? "Step now jumps one expanded node at a time"
+                          : "Step now follows one pseudocode line at a time";
+}
+
+void Application::togglePseudocode() {
+    showPseudocode_ = !showPseudocode_;
+    status_ = showPseudocode_ ? "Pseudocode visible" : "Pseudocode hidden";
+}
+
+void Application::toggleLearningView() {
+    pause();
+    learningView_ = !learningView_;
+    obstacleMenuOpen_ = false;
+    status_ = learningView_ ? "A* from the ground up" : "Back in the interactive lab";
+}
+
+void Application::togglePredict() {
+    predict_ = !predict_;
+    predictRight_ = 0;
+    predictTotal_ = 0;
+    if (!predict_ && awaiting_) {
+        awaiting_ = false;
+        answered_ = true;
+    }
+    status_ = predict_ ? "Predict mode on: before each node is expanded, click the one you think comes out next."
+                       : "Predict mode off.";
+}
+
+void Application::toggleChallenges() {
+    showChallenges_ = !showChallenges_;
+    evaluateChallenges();
+    status_ = showChallenges_ ? "Change the graph until a challenge turns green. Then explain to yourself why."
+                              : "Challenges hidden";
+}
+
+void Application::setStrategy(SearchStrategy strategy) {
+    strategy_ = strategy;
+    invalidate(std::string("Strategy: ") + strategyName(strategy_) + "   (open set sorted by " +
+               priorityName() + "). Press Play or Step.");
+}
+
+void Application::cycleStrategy() {
+    const auto found = std::find(AllStrategies.begin(), AllStrategies.end(), strategy_);
+    const auto index = static_cast<std::size_t>(found - AllStrategies.begin());
+    setStrategy(AllStrategies[(index + 1) % AllStrategies.size()]);
+}
+
+void Application::pressButton(ButtonId id) {
+    if (!buttonEnabled(id)) return;
+    switch (id) {
+    case ButtonId::Play: playing_ ? pause() : play(); break;
+    case ButtonId::Back: stepBack(); break;
+    case ButtonId::Step: pause(); stepForward(); break;
+    case ButtonId::Finish: finishPlayback(); break;
+    case ButtonId::Strategy: cycleStrategy(); break;
+    case ButtonId::Predict: togglePredict(); break;
+    case ButtonId::Obstacles: obstacleMenuOpen_ = !obstacleMenuOpen_; break;
+    case ButtonId::Learn: toggleLearningView(); break;
+    case ButtonId::Challenges: toggleChallenges(); break;
+    case ButtonId::Reset: resetScene(); break;
+    case ButtonId::Theme: toggleTheme(); break;
+    case ButtonId::Speed: cycleSpeed(); break;
+    case ButtonId::StepBy: toggleStepBy(); break;
+    case ButtonId::Code: togglePseudocode(); break;
+    }
+}
+
+// ===================================================================== events
 
 void Application::run() {
     sf::Clock clock;
@@ -384,68 +784,46 @@ void Application::updateResponsiveView(sf::Vector2u windowSize) {
     window_.setView(uiView_);
 }
 
+int Application::hitNode(sf::Vector2f local) const {
+    int best = -1;
+    float bestDistance = NodeRadius * 1.6f;
+    for (const auto& node : graph_.nodes()) {
+        const float d = distance(local, {node.x, node.y});
+        if (d < bestDistance) {
+            best = node.id;
+            bestDistance = d;
+        }
+    }
+    return best;
+}
+
 void Application::handleMousePressed(sf::Vector2i pixel, sf::Mouse::Button button) {
     const sf::Vector2f screen = window_.mapPixelToCoords(pixel, uiView_);
-    const bool simulationRunning = isSimulationRunning();
     if (button == sf::Mouse::Button::Left) {
-        for (std::size_t index = 0; index < buttons_.size(); ++index) {
-            if (!contains(buttons_[index].bounds, screen)) continue;
-            if (index == 0 && !learningView_) {
-                if (simulationRunning) cancelSearch();
-                else startSearch();
-            }
-            if (index == 1 && !learningView_ && !simulationRunning) randomizeRoadmap();
-            if (index == 2 && !learningView_ && !simulationRunning) {
-                obstacleMenuOpen_ = !obstacleMenuOpen_;
-            }
-            if (index == 3 && !simulationRunning) toggleLearningView();
-            return;
-        }
-
-        const sf::FloatRect resetControl({770.f, 74.f}, {70.f, 32.f});
-        const sf::FloatRect themeControl({856.f, 74.f}, {100.f, 32.f});
-        const sf::FloatRect speedControl({972.f, 74.f}, {112.f, 32.f});
-        const sf::FloatRect codeControl({1100.f, 74.f}, {130.f, 32.f});
-        if (resetControl.contains(screen) && !learningView_ && !simulationRunning) {
-            resetScene();
-            return;
-        }
-        if (themeControl.contains(screen)) {
-            toggleTheme();
-            return;
-        }
-        if (speedControl.contains(screen)) {
-            toggleSpeed();
-            return;
-        }
-        if (codeControl.contains(screen) && !learningView_) {
-            togglePseudocode();
-            return;
-        }
-
+        // The obstacle menu sits on top of everything else, so check it first.
         if (obstacleMenuOpen_ && !learningView_) {
-            const sf::FloatRect circleItem({341.f, 118.f}, {170.f, 34.f});
-            const sf::FloatRect rectangleItem({341.f, 152.f}, {170.f, 34.f});
-            const sf::FloatRect deleteItem({341.f, 186.f}, {170.f, 34.f});
-            if (circleItem.contains(screen)) {
-                obstacleTool_ = ObstacleTool::AddCircle;
-                obstacleMenuOpen_ = false;
-                status_ = "Circle tool selected — click inside the graph";
-                return;
-            }
-            if (rectangleItem.contains(screen)) {
-                obstacleTool_ = ObstacleTool::AddRectangle;
-                obstacleMenuOpen_ = false;
-                status_ = "Rectangle tool selected — click inside the graph";
-                return;
-            }
-            if (deleteItem.contains(screen)) {
-                obstacleTool_ = ObstacleTool::Delete;
-                obstacleMenuOpen_ = false;
-                status_ = "Delete tool selected — click an obstacle";
-                return;
+            const std::array<std::pair<ObstacleTool, const char*>, 5> items{{
+                {ObstacleTool::AddCircle, "Circle tool: click inside the graph"},
+                {ObstacleTool::AddRectangle, "Rectangle tool: click inside the graph"},
+                {ObstacleTool::Delete, "Delete tool: click an obstacle"},
+                {ObstacleTool::SetStart, "Click a node to make it the start"},
+                {ObstacleTool::SetGoal, "Click a node to make it the goal"},
+            }};
+            for (std::size_t index = 0; index < items.size(); ++index) {
+                const sf::FloatRect item({794.f, 118.f + 34.f * static_cast<float>(index)}, {240.f, 34.f});
+                if (item.contains(screen)) {
+                    obstacleTool_ = items[index].first;
+                    obstacleMenuOpen_ = false;
+                    status_ = items[index].second;
+                    return;
+                }
             }
             obstacleMenuOpen_ = false;
+        }
+        for (const auto& candidate : buttons_) {
+            if (!contains(candidate.bounds, screen)) continue;
+            pressButton(candidate.id);
+            return;
         }
     }
 
@@ -463,18 +841,42 @@ void Application::handleMousePressed(sf::Vector2i pixel, sf::Mouse::Button butto
         return;
     }
 
-    if (simulationRunning) {
-        status_ = "Cancel the simulation before editing obstacles";
+    if (local.x < 0.f || local.y < 0.f || local.x > CanvasWidth || local.y > CanvasHeight) return;
+
+    if (awaiting_ && button == sf::Mouse::Button::Left) {
+        const int node = hitNode(local);
+        if (node >= 0) answer(node);
         return;
     }
 
-    if (local.x < 0.f || local.y < 0.f || local.x > CanvasWidth || local.y > CanvasHeight) return;
+    // Start and goal: menu tools, or Shift+click (start) and Ctrl/Cmd+click (goal).
+    const bool shift = modifierDown(sf::Keyboard::Key::LShift, sf::Keyboard::Key::RShift);
+    const bool command = modifierDown(sf::Keyboard::Key::LControl, sf::Keyboard::Key::RControl) ||
+                         modifierDown(sf::Keyboard::Key::LSystem, sf::Keyboard::Key::RSystem);
+    const bool settingStart = obstacleTool_ == ObstacleTool::SetStart || (shift && button == sf::Mouse::Button::Left);
+    const bool settingGoal = obstacleTool_ == ObstacleTool::SetGoal || (command && button == sf::Mouse::Button::Left);
+    if (settingStart || settingGoal) {
+        const int node = hitNode(local);
+        if (node < 0) {
+            status_ = "Click on a node to choose it.";
+            return;
+        }
+        if ((settingStart && node == goalNode_) || (settingGoal && node == startNode_)) {
+            status_ = "Start and goal must be different nodes.";
+            return;
+        }
+        (settingStart ? startNode_ : goalNode_) = node;
+        obstacleTool_ = ObstacleTool::Move;
+        invalidate(std::string(settingStart ? "Start" : "Goal") + " is now node " + std::to_string(node) +
+                   ". Press Play or Step.");
+        return;
+    }
+
     if (button == sf::Mouse::Button::Right || obstacleTool_ == ObstacleTool::Delete) {
         deleteObstacleAt(local);
         return;
     }
-    if (obstacleTool_ == ObstacleTool::AddCircle ||
-        obstacleTool_ == ObstacleTool::AddRectangle) {
+    if (obstacleTool_ == ObstacleTool::AddCircle || obstacleTool_ == ObstacleTool::AddRectangle) {
         addObstacleAt(local);
         return;
     }
@@ -499,10 +901,6 @@ void Application::handleMousePressed(sf::Vector2i pixel, sf::Mouse::Button butto
 }
 
 void Application::handleMouseMoved(sf::Vector2i pixel) {
-    if (isSimulationRunning()) {
-        dragKind_ = DragKind::None;
-        return;
-    }
     if (dragKind_ == DragKind::None) return;
     sf::Vector2f local = toLocal(pixel);
     local.x = std::clamp(local.x, 0.f, CanvasWidth);
@@ -510,140 +908,134 @@ void Application::handleMouseMoved(sf::Vector2i pixel) {
 
     if (dragKind_ == DragKind::Circle) circles_[draggedIndex_].center = local - dragOffset_;
     if (dragKind_ == DragKind::Rectangle) rectangles_[draggedIndex_].position = local - dragOffset_;
+    movedOnce_ = true;
     recomputeEdgeAvailability();
-    clearSearch("The graph changed — run the search again");
+    invalidate("The graph changed. Dashed red edges are blocked. Run the search again.");
 }
 
 void Application::handleKeyPressed(sf::Keyboard::Scancode key) {
-    if (key == sf::Keyboard::Scancode::Escape) window_.close();
-    if (!learningView_ &&
-        (key == sf::Keyboard::Scancode::Space || key == sf::Keyboard::Scancode::Enter)) {
-        if (isSimulationRunning()) cancelSearch();
-        else startSearch();
+    using Key = sf::Keyboard::Scancode;
+    if (key == Key::Escape) {
+        if (obstacleMenuOpen_) obstacleMenuOpen_ = false;
+        else window_.close();
+        return;
     }
-    if (key == sf::Keyboard::Scancode::R && !learningView_ && !isSimulationRunning()) resetScene();
-    if (key == sf::Keyboard::Scancode::G && !learningView_ && !isSimulationRunning()) randomizeRoadmap();
-    if (key == sf::Keyboard::Scancode::T) toggleTheme();
-    if (key == sf::Keyboard::Scancode::S) toggleSpeed();
-    if (key == sf::Keyboard::Scancode::P && !learningView_) togglePseudocode();
-    if (key == sf::Keyboard::Scancode::L && !isSimulationRunning()) toggleLearningView();
-    if (learningView_ && key == sf::Keyboard::Scancode::Left) {
-        learningPage_ = std::max(0, learningPage_ - 1);
+    if (learningView_) {
+        if (key == Key::Left) learningPage_ = std::max(0, learningPage_ - 1);
+        if (key == Key::Right) learningPage_ = std::min(3, learningPage_ + 1);
+        if (key == Key::L) toggleLearningView();
+        if (key == Key::T) toggleTheme();
+        return;
     }
-    if (learningView_ && key == sf::Keyboard::Scancode::Right) {
-        learningPage_ = std::min(3, learningPage_ + 1);
-    }
-}
-
-void Application::update(sf::Time elapsed) {
-    if (learningView_) return;
-    if (animationPhase_ != AnimationPhase::Expanding &&
-        animationPhase_ != AnimationPhase::ShowingPath) return;
-
-    animationAccumulator_ += elapsed;
-    const sf::Time step = animationPhase_ == AnimationPhase::Expanding
-                              ? sf::milliseconds(slowMode_ ? 520 : 220)
-                              : sf::milliseconds(slowMode_ ? 360 : 120);
-    while (animationAccumulator_ >= step) {
-        animationAccumulator_ -= step;
-        if (animationPhase_ == AnimationPhase::Expanding) {
-            if (animationIndex_ < result_.steps.size()) {
-                if (slowMode_) {
-                    applySearchStep(result_.steps[animationIndex_++]);
-                } else {
-                    const SearchStep* checkpoint = nullptr;
-                    do {
-                        const SearchStep& trace = result_.steps[animationIndex_++];
-                        applySearchStep(trace);
-                        if (trace.type == SearchStepType::SelectCurrent ||
-                            trace.type == SearchStepType::GoalReached ||
-                            trace.type == SearchStepType::SearchExhausted) {
-                            checkpoint = &trace;
-                        }
-                    } while (animationIndex_ < result_.steps.size() && checkpoint == nullptr);
-
-                    activePseudocodeLine_ = -1;
-                    currentNeighbor_ = -1;
-                    if (checkpoint && checkpoint->type == SearchStepType::SelectCurrent) {
-                        std::ostringstream message;
-                        message << "Exploring node " << checkpoint->currentNode
-                                << "   f=" << checkpoint->score.f;
-                        status_ = message.str();
-                    }
-                }
-            } else if (result_.found) {
-                animationPhase_ = AnimationPhase::ShowingPath;
-                animationIndex_ = 0;
-                status_ = "Goal reached — tracing the lowest-cost path";
-            } else {
-                animationPhase_ = AnimationPhase::Complete;
-                status_ = "No path — the obstacles disconnected the graph";
-            }
-        } else if (animationIndex_ < result_.path.size()) {
-            visiblePathNodes_.insert(result_.path[animationIndex_++]);
-        } else {
-            animationPhase_ = AnimationPhase::Complete;
-            std::ostringstream message;
-            message << "Best path: cost " << result_.cost << "   ·   explored "
-                    << result_.expanded.size() << " nodes";
-            status_ = message.str();
-        }
+    switch (key) {
+    case Key::Space: pressButton(ButtonId::Play); break;
+    case Key::Enter: pressButton(ButtonId::Play); break;
+    case Key::Right: pressButton(ButtonId::Step); break;
+    case Key::Left: stepBack(); break;
+    case Key::Home: restartPlayback(); break;
+    case Key::End: finishPlayback(); break;
+    case Key::Num1: setStrategy(SearchStrategy::AStar); break;
+    case Key::Num2: setStrategy(SearchStrategy::Dijkstra); break;
+    case Key::Num3: setStrategy(SearchStrategy::Greedy); break;
+    case Key::Num4: setStrategy(SearchStrategy::WeightedAStar); break;
+    case Key::Q: togglePredict(); break;
+    case Key::C: toggleChallenges(); break;
+    case Key::N: toggleStepBy(); break;
+    case Key::S: cycleSpeed(); break;
+    case Key::R: resetScene(); break;
+    case Key::G: randomizeRoadmap(); break;
+    case Key::T: toggleTheme(); break;
+    case Key::P: togglePseudocode(); break;
+    case Key::L: toggleLearningView(); break;
+    default: break;
     }
 }
 
-void Application::applySearchStep(const SearchStep& step) {
-    activePseudocodeLine_ = step.pseudocodeLine;
-    currentNeighbor_ = step.neighborNode;
-    std::ostringstream message;
+// ===================================================================== drawing
 
-    switch (step.type) {
-    case SearchStepType::Initialize:
-        scores_[step.currentNode] = step.score;
-        currentScore_ = step.score;
-        message << "Start at node " << step.currentNode << " and add it to open";
-        break;
-    case SearchStepType::BeginLoop:
-        currentNeighbor_ = -1;
-        message << "The open set is not empty — continue searching";
-        break;
-    case SearchStepType::SelectCurrent:
-        expandedNodes_.insert(step.currentNode);
-        scores_[step.currentNode] = step.score;
-        currentScore_ = step.score;
-        message << "Choose node " << step.currentNode << " with f=" << step.score.f;
-        break;
-    case SearchStepType::CheckGoal:
-        currentScore_ = step.score;
-        message << "Is node " << step.currentNode << " the goal? "
-                << (step.improved ? "Yes" : "No");
-        break;
-    case SearchStepType::InspectNeighbor:
-        message << "Inspect neighbor " << step.neighborNode << " (edge cost "
-                << step.edgeCost << ")";
-        break;
-    case SearchStepType::CalculateTentative:
-        message << "New g for node " << step.neighborNode << " = " << step.score.g
-                << " + " << step.edgeCost << " = " << step.tentativeG;
-        break;
-    case SearchStepType::CompareCost:
-        message << (step.improved ? "This route is cheaper" : "Keep the existing route");
-        if (step.previousG >= 0) message << " (old g=" << step.previousG << ")";
-        break;
-    case SearchStepType::UpdateNeighbor:
-        scores_[step.neighborNode] = step.score;
-        message << "Update node " << step.neighborNode << ": g=" << step.score.g
-                << ", h=" << step.score.h << ", f=" << step.score.f;
-        break;
-    case SearchStepType::GoalReached:
-        currentNeighbor_ = -1;
-        message << "Goal reached — rebuild the path using parents";
-        break;
-    case SearchStepType::SearchExhausted:
-        currentNeighbor_ = -1;
-        message << "Open is empty, so no path exists";
-        break;
+const char* Application::priorityName() const {
+    switch (strategy_) {
+    case SearchStrategy::Dijkstra: return "g";
+    case SearchStrategy::Greedy: return "h";
+    case SearchStrategy::WeightedAStar: return "f = g + 2h";
+    default: return "f = g + h";
     }
-    status_ = message.str();
+}
+
+std::string Application::scoreLabel(const NodeScore& score) const {
+    switch (strategy_) {
+    case SearchStrategy::Dijkstra: return "g=" + std::to_string(score.g);
+    case SearchStrategy::Greedy: return "h=" + std::to_string(score.h);
+    case SearchStrategy::WeightedAStar:
+        return std::to_string(score.g) + "+2x" + std::to_string(score.h) + "=" + std::to_string(score.f);
+    default:
+        return std::to_string(score.g) + "+" + std::to_string(score.h) + "=" + std::to_string(score.f);
+    }
+}
+
+std::string Application::buttonLabel(ButtonId id) const {
+    switch (id) {
+    case ButtonId::Play: return playing_ ? "Pause" : "Play";
+    case ButtonId::Back: return "< Back";
+    case ButtonId::Step: return awaiting_ ? "Guess!" : "Step >";
+    case ButtonId::Finish: return "Finish";
+    case ButtonId::Strategy: return std::string("Strategy: ") + strategyName(strategy_);
+    case ButtonId::Predict: return predict_ ? "Predict: ON" : "Predict: off";
+    case ButtonId::Obstacles: return "Edit graph";
+    case ButtonId::Learn: return learningView_ ? "Back to lab" : "Learn A*";
+    case ButtonId::Challenges: {
+        int done = 0;
+        for (const bool solved : challengesDone_) done += solved ? 1 : 0;
+        return "Challenges " + std::to_string(done) + "/" + std::to_string(ChallengeCount);
+    }
+    case ButtonId::Reset: return "Reset";
+    case ButtonId::Theme: return darkMode_ ? "Light" : "Dark";
+    case ButtonId::Speed: return "Speed " + std::to_string(speed_);
+    case ButtonId::StepBy: return stepByNode_ ? "Step: node" : "Step: line";
+    case ButtonId::Code: return showPseudocode_ ? "Hide code" : "Show code";
+    }
+    return "";
+}
+
+bool Application::buttonActive(ButtonId id) const {
+    switch (id) {
+    case ButtonId::Play: return playing_;
+    case ButtonId::Predict: return predict_;
+    case ButtonId::Obstacles: return obstacleMenuOpen_ || obstacleTool_ != ObstacleTool::Move;
+    case ButtonId::Learn: return learningView_;
+    case ButtonId::Challenges: return showChallenges_;
+    default: return false;
+    }
+}
+
+bool Application::buttonEnabled(ButtonId id) const {
+    if (learningView_) return id == ButtonId::Learn || id == ButtonId::Theme;
+    switch (id) {
+    case ButtonId::Back: return result_.has_value() && position_ >= 0;
+    case ButtonId::Step: return !awaiting_ && !atEnd();
+    case ButtonId::Finish: return !atEnd();
+    default: return true;
+    }
+}
+
+void Application::drawButton(const Button& button) {
+    const bool active = buttonActive(button.id);
+    const bool enabled = buttonEnabled(button.id);
+    sf::Color accent = Expanded;
+    if (button.id == ButtonId::Play) accent = playing_ ? Goal : Start;
+    if (button.id == ButtonId::Predict || button.id == ButtonId::Challenges) accent = OpenRing;
+    if (button.id == ButtonId::Obstacles) accent = ObstacleBorder;
+    sf::RectangleShape shape(button.bounds.size);
+    shape.setPosition(button.bounds.position);
+    const bool filled = active || (button.id == ButtonId::Play && enabled);
+    shape.setFillColor(button.utility ? PanelLight : (filled ? accent : Panel));
+    shape.setOutlineThickness(button.utility ? 0.f : 1.f);
+    shape.setOutlineColor(filled ? accent : Edge);
+    window_.draw(shape);
+    const sf::Color textColor = !enabled ? Edge : (filled && !button.utility ? Panel : (button.utility ? Muted : Text));
+    drawText(buttonLabel(button.id),
+             button.bounds.position + (button.utility ? sf::Vector2f{10.f, 7.f} : sf::Vector2f{12.f, 11.f}),
+             button.utility ? 1.4f : 1.75f, textColor, true);
 }
 
 void Application::render() {
@@ -653,7 +1045,7 @@ void Application::render() {
     } else {
         drawRoadmap();
         drawObstacles();
-        if (showPseudocode_) drawSidebar();
+        drawSidebar();
         drawLegend();
     }
     drawHeader();
@@ -662,56 +1054,32 @@ void Application::render() {
 
 void Application::drawHeader() {
     drawText("AStarLab", {42.f, 18.f}, 3.f, Text, true);
-    drawText("Explore how A* finds the lowest-cost route", {200.f, 27.f}, 1.7f, Muted);
-    const bool simulationRunning = isSimulationRunning();
-    for (std::size_t index = 0; index < buttons_.size(); ++index) {
-        const auto& button = buttons_[index];
-        const bool active = (index == 0 && simulationRunning && !learningView_) ||
-                            (index == 2 && obstacleMenuOpen_) ||
-                            (index == 3 && learningView_);
-        const bool unavailable = (learningView_ && index < 3) ||
-                                 (simulationRunning && index > 0);
-        const std::string label = index == 0 && simulationRunning
-                                      ? "Cancel"
-                                      : button.label;
-        const sf::Color accent = index == 0 && simulationRunning ? Goal : button.accent;
-        sf::RectangleShape shape(button.bounds.size);
-        shape.setPosition(button.bounds.position);
-        shape.setFillColor(active ? accent : Panel);
-        shape.setOutlineThickness(1.f);
-        shape.setOutlineColor(active ? accent : Edge);
-        window_.draw(shape);
-        drawText(label, button.bounds.position + sf::Vector2f{14.f, 10.f}, 2.f,
-                 unavailable ? Muted : (active ? Panel : Text), true);
+    drawText("See every decision behind the shortest path", {200.f, 27.f}, 1.7f, Muted);
+    for (const auto& button : buttons_) {
+        if (learningView_ && button.utility && button.id != ButtonId::Theme) continue;
+        drawButton(button);
     }
 
-    const std::array<std::tuple<sf::FloatRect, std::string, sf::Color>, 4> utilities{{
-        {{{770.f, 74.f}, {70.f, 32.f}}, "Reset", simulationRunning ? Edge : Muted},
-        {{{856.f, 74.f}, {100.f, 32.f}}, darkMode_ ? "Light" : "Dark", Muted},
-        {{{972.f, 74.f}, {112.f, 32.f}}, slowMode_ ? "Faster" : "Slower", Expanded},
-        {{{1100.f, 74.f}, {130.f, 32.f}}, showPseudocode_ ? "Hide code" : "Show code", Path},
-    }};
-    for (const auto& [bounds, label, accent] : utilities) {
-        sf::RectangleShape control(bounds.size);
-        control.setPosition(bounds.position);
-        control.setFillColor(PanelLight);
-        window_.draw(control);
-        drawText(label, bounds.position + sf::Vector2f{11.f, 7.f}, 1.45f, accent, true);
+    if (!learningView_) {
+        const bool alert = awaiting_ || status_.rfind("Not node", 0) == 0;
+        drawWrapped(status_, {42.f, 120.f}, 1.25f, alert ? OpenRing : Text, 100, 18.f);
     }
-
-    drawText(status_, {610.f, 128.f}, 1.2f,
-             status_.find("No path") == 0 ? Goal : Text);
 
     if (obstacleMenuOpen_ && !learningView_) {
-        sf::RectangleShape menu({170.f, 102.f});
-        menu.setPosition({341.f, 118.f});
+        const std::array<std::pair<const char*, sf::Color>, 5> items{{
+            {"Add circle", Text}, {"Add rectangle", Text}, {"Delete obstacle", Goal},
+            {"Set start node  (Shift+click)", Start}, {"Set goal node  (Ctrl/Cmd+click)", Goal},
+        }};
+        sf::RectangleShape menu({240.f, 34.f * static_cast<float>(items.size())});
+        menu.setPosition({794.f, 118.f});
         menu.setFillColor(PanelLight);
         menu.setOutlineThickness(1.f);
         menu.setOutlineColor(Edge);
         window_.draw(menu);
-        drawText("Add circle", {355.f, 123.f}, 1.45f, Text);
-        drawText("Add rectangle", {355.f, 157.f}, 1.45f, Text);
-        drawText("Delete obstacle", {355.f, 191.f}, 1.45f, Goal);
+        for (std::size_t index = 0; index < items.size(); ++index) {
+            drawText(items[index].first, {806.f, 124.f + 34.f * static_cast<float>(index)}, 1.3f,
+                     items[index].second);
+        }
     }
 }
 
@@ -723,14 +1091,37 @@ void Application::drawRoadmap() {
     canvas.setOutlineColor(Edge);
     window_.draw(canvas);
 
+    const bool finished = atEnd() && result_->found;
+    const auto onPath = [&](int a, int b) {
+        if (!finished) return false;
+        const auto& path = result_->path;
+        for (std::size_t index = 1; index < path.size(); ++index) {
+            if ((path[index - 1] == a && path[index] == b) || (path[index - 1] == b && path[index] == a)) return true;
+        }
+        return false;
+    };
+
     for (const auto& edge : graph_.edges()) {
         const sf::Vector2f from = toScreen(graph_.node(edge.from));
         const sf::Vector2f to = toScreen(graph_.node(edge.to));
         const bool inspecting = currentScore_ && currentNeighbor_ >= 0 &&
             ((edge.from == currentScore_->nodeId && edge.to == currentNeighbor_) ||
              (edge.to == currentScore_->nodeId && edge.from == currentNeighbor_));
-        drawLine(from, to, inspecting ? 5.f : (edge.enabled ? 2.f : 1.f),
-                 inspecting ? Path : (edge.enabled ? Edge : BlockedEdge));
+        if (onPath(edge.from, edge.to)) {
+            drawLine(from, to, 7.f, Path);
+        } else if (inspecting) {
+            drawLine(from, to, 5.f, Path);
+        } else if (edge.enabled) {
+            drawLine(from, to, 2.f, Edge);
+        } else {
+            // Dashed line for blocked edges.
+            const sf::Vector2f delta = to - from;
+            const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+            const sf::Vector2f unit = delta / length;
+            for (float t = 0.f; t < length; t += 11.f) {
+                drawLine(from + unit * t, from + unit * std::min(length, t + 6.f), 1.6f, BlockedEdge);
+            }
+        }
 
         const sf::Vector2f midpoint = (from + to) / 2.f;
         sf::RectangleShape costBackground({24.f, 15.f});
@@ -738,17 +1129,8 @@ void Application::drawRoadmap() {
         costBackground.setFillColor(Panel);
         window_.draw(costBackground);
         const std::string cost = std::to_string(edge.cost);
-        drawText(cost, midpoint - sf::Vector2f{cost.size() * 3.3f, 5.f}, 1.1f,
+        drawText(cost, midpoint - sf::Vector2f{static_cast<float>(cost.size()) * 3.3f, 5.f}, 1.1f,
                  edge.enabled ? Muted : BlockedEdge);
-    }
-
-    if (visiblePathNodes_.size() >= 2) {
-        for (std::size_t index = 1; index < result_.path.size(); ++index) {
-            if (visiblePathNodes_.count(result_.path[index - 1]) == 0U ||
-                visiblePathNodes_.count(result_.path[index]) == 0U) continue;
-            drawLine(toScreen(graph_.node(result_.path[index - 1])),
-                     toScreen(graph_.node(result_.path[index])), 6.f, Path);
-        }
     }
 
     for (const auto& node : graph_.nodes()) drawNode(node.id);
@@ -763,8 +1145,10 @@ void Application::drawObstacles() {
         shape.setOutlineThickness(3.f);
         shape.setOutlineColor(ObstacleBorder);
         window_.draw(shape);
-        drawText("Move me", {CanvasLeft + obstacle.center.x - 26.f,
-                             CanvasTop + obstacle.center.y - 8.f}, 1.3f, Text, true);
+        if (!movedOnce_) {
+            drawText("drag me", {CanvasLeft + obstacle.center.x - 24.f, CanvasTop + obstacle.center.y - 8.f},
+                     1.3f, Text, true);
+        }
     }
     for (const auto& obstacle : rectangles_) {
         sf::RectangleShape shape(obstacle.size);
@@ -773,122 +1157,224 @@ void Application::drawObstacles() {
         shape.setOutlineThickness(3.f);
         shape.setOutlineColor(ObstacleBorder);
         window_.draw(shape);
-        drawText("Move me", {CanvasLeft + obstacle.position.x + obstacle.size.x / 2.f - 26.f,
-                             CanvasTop + obstacle.position.y + obstacle.size.y / 2.f - 8.f},
-                 1.3f, Text, true);
+        if (!movedOnce_) {
+            drawText("drag me", {CanvasLeft + obstacle.position.x + obstacle.size.x / 2.f - 24.f,
+                                 CanvasTop + obstacle.position.y + obstacle.size.y / 2.f - 8.f},
+                     1.3f, Text, true);
+        }
     }
 }
 
 void Application::drawSidebar() {
     const float left = 982.f;
+    if (showChallenges_) {
+        drawChallengePanel(left, 180.f);
+        return;
+    }
     if (showPseudocode_) {
-        drawText("A* pseudocode", {left, 180.f}, 2.1f, Text, true);
-        drawText("The active line follows the search", {left, 211.f}, 1.05f, Muted);
-
-        struct CodeToken {
-            std::string text;
-            sf::Color color;
-            bool bold{false};
-        };
-        struct CodeLine {
-            int indent{};
-            std::vector<CodeToken> tokens;
-        };
-        const auto token = [](std::string text, sf::Color color, bool bold = false) {
-            return CodeToken{std::move(text), color, bold};
-        };
-        const std::array<CodeLine, 9> pseudocode{{
-            {0, {token("openSet", SyntaxVariable), token(" = ", SyntaxOperator),
-                 token("PriorityQueue", SyntaxFunction), token("({ ", Text),
-                 token("start", SyntaxVariable), token(" })", Text)}},
-            {0, {token("while not", SyntaxKeyword, true), token(" openSet.", Text),
-                 token("empty", SyntaxFunction), token("():", Text)}},
-            {1, {token("current", SyntaxVariable), token(" = ", SyntaxOperator),
-                 token("openSet.", Text), token("popLowestF", SyntaxFunction), token("()", Text)}},
-            {1, {token("if", SyntaxKeyword, true), token(" current ", SyntaxVariable),
-                 token("==", SyntaxOperator), token(" goal:", SyntaxVariable)}},
-            {2, {token("return", SyntaxKeyword, true), token(" reconstructPath", SyntaxFunction),
-                 token("(current)", SyntaxVariable)}},
-            {1, {token("for", SyntaxKeyword, true), token(" neighbor ", SyntaxVariable),
-                 token("in", SyntaxKeyword, true), token(" neighbors", SyntaxFunction),
-                 token("(current):", SyntaxVariable)}},
-            {2, {token("tentativeG", SyntaxVariable), token(" = ", SyntaxOperator),
-                 token("g[current] ", SyntaxVariable), token("+", SyntaxOperator),
-                 token(" cost", SyntaxFunction), token("(current, neighbor)", SyntaxVariable)}},
-            {2, {token("if", SyntaxKeyword, true), token(" tentativeG ", SyntaxVariable),
-                 token("<", SyntaxOperator), token(" g[neighbor]:", SyntaxVariable)}},
-            {3, {token("updateScoresAndParent", SyntaxFunction),
-                 token("(neighbor, tentativeG)", SyntaxVariable)}},
-        }};
-        float lineTop = 237.f;
-        for (std::size_t index = 0; index < pseudocode.size(); ++index) {
-            const bool active = activePseudocodeLine_ == static_cast<int>(index + 1);
-            if (active) {
-                sf::RectangleShape highlight({255.f, 28.f});
-                highlight.setPosition({left, lineTop - 4.f});
-                highlight.setFillColor({Expanded.r, Expanded.g, Expanded.b, 76});
-                window_.draw(highlight);
-            }
-
-            sf::RectangleShape gutter({1.f, 28.f});
-            gutter.setPosition({left + 30.f, lineTop - 4.f});
-            gutter.setFillColor(Edge);
-            window_.draw(gutter);
-            drawText(std::to_string(index + 1), {left + 12.f, lineTop}, 1.05f,
-                     active ? Text : Edge, active);
-
-            constexpr float HorizontalScale = 0.72f;
-            float tokenLeft = left + 40.f + static_cast<float>(pseudocode[index].indent) * 12.f;
-            for (const auto& codeToken : pseudocode[index].tokens) {
-                sf::Text label(font_, codeToken.text, 10);
-                label.setPosition({tokenLeft, lineTop});
-                label.setFillColor(codeToken.color);
-                label.setScale({HorizontalScale, 1.f});
-                if (codeToken.bold) label.setStyle(sf::Text::Bold);
-                window_.draw(label);
-                const auto& glyphs = label.getShapedGlyphs();
-                if (!glyphs.empty()) {
-                    const auto& lastGlyph = glyphs.back();
-                    tokenLeft += (lastGlyph.position.x + lastGlyph.glyph.advance) * HorizontalScale;
-                }
-            }
-            lineTop += 31.f;
-        }
+        drawPseudocode(left, 180.f);
+        drawLiveValues(left, 524.f);
+        drawOpenSetOrComparison(left, 628.f);
     } else {
         drawText("Visualization focus", {left, 180.f}, 2.1f, Text, true);
-        drawText("Pseudocode is hidden", {left, 216.f}, 1.25f, Muted);
-        drawText("Use Show code to follow each line", {left, 242.f}, 1.05f, Muted);
+        drawText("Pseudocode is hidden (P to show)", {left, 214.f}, 1.15f, Muted);
+        drawLiveValues(left, 250.f);
+        drawOpenSetOrComparison(left, 360.f);
     }
+}
 
-    const float liveTop = showPseudocode_ ? 532.f : 285.f;
-    sf::RectangleShape current({255.f, 118.f});
-    current.setPosition({left, liveTop});
-    current.setFillColor(PanelLight);
-    current.setOutlineThickness(1.f);
-    current.setOutlineColor(currentScore_ ? Expanded : Edge);
-    window_.draw(current);
-    drawText("Live values", {left + 14.f, liveTop + 12.f}, 1.25f, Muted, true);
-    if (currentScore_) {
-        std::string nodes = "Current  " + std::to_string(currentScore_->nodeId);
-        if (currentNeighbor_ >= 0) nodes += "     Neighbor  " + std::to_string(currentNeighbor_);
-        drawText(nodes, {left + 14.f, liveTop + 38.f}, 1.25f, Text, true);
-        drawText("g " + std::to_string(currentScore_->g), {left + 14.f, liveTop + 74.f}, 1.55f, Start, true);
-        drawText("h " + std::to_string(currentScore_->h), {left + 91.f, liveTop + 74.f}, 1.55f, Goal, true);
-        drawText("f " + std::to_string(currentScore_->f), {left + 168.f, liveTop + 74.f}, 1.55f, Path, true);
-    } else {
-        drawText("Run the search to begin", {left + 14.f, liveTop + 49.f}, 1.25f, Muted);
+void Application::drawPseudocode(float left, float top) {
+    drawText(std::string(strategyName(strategy_)) + " pseudocode", {left, top}, 2.1f, Text, true);
+    drawText("The active line follows the search", {left, top + 31.f}, 1.05f, Muted);
+
+    struct CodeToken {
+        std::string text;
+        sf::Color color;
+        bool bold{false};
+    };
+    struct CodeLine {
+        int indent{};
+        std::vector<CodeToken> tokens;
+    };
+    const auto token = [](std::string text, sf::Color color, bool bold = false) {
+        return CodeToken{std::move(text), color, bold};
+    };
+    const std::array<CodeLine, 9> pseudocode{{
+        {0, {token("openSet", SyntaxVariable), token(" = ", SyntaxOperator),
+             token("PriorityQueue", SyntaxFunction), token("({ ", Text),
+             token("start", SyntaxVariable), token(" })", Text)}},
+        {0, {token("while not", SyntaxKeyword, true), token(" openSet.", Text),
+             token("empty", SyntaxFunction), token("():", Text)}},
+        {1, {token("current", SyntaxVariable), token(" = ", SyntaxOperator),
+             token("openSet.", Text), token(popName(strategy_), SyntaxFunction), token("()", Text)}},
+        {1, {token("if", SyntaxKeyword, true), token(" current ", SyntaxVariable),
+             token("==", SyntaxOperator), token(" goal:", SyntaxVariable)}},
+        {2, {token("return", SyntaxKeyword, true), token(" reconstructPath", SyntaxFunction),
+             token("(current)", SyntaxVariable)}},
+        {1, {token("for", SyntaxKeyword, true), token(" neighbor ", SyntaxVariable),
+             token("in", SyntaxKeyword, true), token(" neighbors", SyntaxFunction),
+             token("(current):", SyntaxVariable)}},
+        {2, {token("tentativeG", SyntaxVariable), token(" = ", SyntaxOperator),
+             token("g[current] ", SyntaxVariable), token("+", SyntaxOperator),
+             token(" cost", SyntaxFunction), token("(current, neighbor)", SyntaxVariable)}},
+        {2, {token("if", SyntaxKeyword, true), token(" tentativeG ", SyntaxVariable),
+             token("<", SyntaxOperator), token(" g[neighbor]:", SyntaxVariable)}},
+        {3, {token("updateScoresAndParent", SyntaxFunction),
+             token("(neighbor, tentativeG)", SyntaxVariable)}},
+    }};
+    float lineTop = top + 57.f;
+    for (std::size_t index = 0; index < pseudocode.size(); ++index) {
+        const bool active = activePseudocodeLine_ == static_cast<int>(index + 1);
+        if (active) {
+            sf::RectangleShape highlight({258.f, 28.f});
+            highlight.setPosition({left, lineTop - 4.f});
+            highlight.setFillColor({Expanded.r, Expanded.g, Expanded.b, 76});
+            window_.draw(highlight);
+        }
+
+        sf::RectangleShape gutter({1.f, 28.f});
+        gutter.setPosition({left + 30.f, lineTop - 4.f});
+        gutter.setFillColor(Edge);
+        window_.draw(gutter);
+        drawText(std::to_string(index + 1), {left + 12.f, lineTop}, 1.05f,
+                 active ? Text : Edge, active);
+
+        constexpr float HorizontalScale = 0.72f;
+        float tokenLeft = left + 40.f + static_cast<float>(pseudocode[index].indent) * 12.f;
+        for (const auto& codeToken : pseudocode[index].tokens) {
+            sf::Text label(font_, codeToken.text, 10);
+            label.setPosition({tokenLeft, lineTop});
+            label.setFillColor(codeToken.color);
+            label.setScale({HorizontalScale, 1.f});
+            if (codeToken.bold) label.setStyle(sf::Text::Bold);
+            window_.draw(label);
+            const auto& glyphs = label.getShapedGlyphs();
+            if (!glyphs.empty()) {
+                const auto& lastGlyph = glyphs.back();
+                tokenLeft += (lastGlyph.position.x + lastGlyph.glyph.advance) * HorizontalScale;
+            }
+        }
+        lineTop += 31.f;
     }
+}
 
-    drawText("Space  Run     S  Speed", {left, 681.f}, 1.2f, Muted);
-    drawText("R  Reset       G  Random", {left, 704.f}, 1.2f, Muted);
-    drawText("T  Theme       P  Code       L  Learn", {left, 727.f}, 1.05f, Muted);
+void Application::drawLiveValues(float left, float top) {
+    sf::RectangleShape box({258.f, 96.f});
+    box.setPosition({left, top});
+    box.setFillColor(PanelLight);
+    box.setOutlineThickness(1.f);
+    box.setOutlineColor(currentScore_ ? Expanded : Edge);
+    window_.draw(box);
+    drawText("Right now", {left + 12.f, top + 8.f}, 1.15f, Muted, true);
+    if (!currentScore_) {
+        drawText("Press Step to begin", {left + 12.f, top + 34.f}, 1.25f, Muted);
+        return;
+    }
+    std::string nodes = "Current " + std::to_string(currentScore_->nodeId);
+    if (currentNeighbor_ >= 0) nodes += "   Neighbor " + std::to_string(currentNeighbor_);
+    drawText(nodes, {left + 12.f, top + 28.f}, 1.2f, Text, true);
+    drawText("g " + std::to_string(currentScore_->g), {left + 12.f, top + 50.f}, 1.45f, Start, true);
+    drawText("h " + std::to_string(currentScore_->h), {left + 92.f, top + 50.f}, 1.45f, Goal, true);
+    drawText("f " + std::to_string(currentScore_->f), {left + 172.f, top + 50.f}, 1.45f, Path, true);
+    if (lastStep_ && (lastStep_->type == SearchStepType::CalculateTentative ||
+                      lastStep_->type == SearchStepType::CompareCost)) {
+        std::string calc = lastStep_->type == SearchStepType::CalculateTentative
+            ? "tentativeG = " + std::to_string(lastStep_->score.g) + " + " + std::to_string(lastStep_->edgeCost) +
+                  " = " + std::to_string(lastStep_->tentativeG)
+            : std::to_string(lastStep_->tentativeG) + " < " + infinityOr(lastStep_->previousG) + " ?  " +
+                  (lastStep_->improved ? "yes, update" : "no, keep");
+        drawText(calc, {left + 12.f, top + 74.f}, 1.1f, Muted);
+    }
+}
+
+void Application::drawOpenSetOrComparison(float left, float top) {
+    sf::RectangleShape box({258.f, 140.f});
+    box.setPosition({left, top});
+    box.setFillColor(PanelLight);
+    window_.draw(box);
+    if (atEnd() && !comparison_.empty()) {
+        drawText("Same graph, every strategy", {left + 12.f, top + 8.f}, 1.15f, Muted, true);
+        drawText("Strategy", {left + 12.f, top + 30.f}, 1.05f, Muted);
+        drawText("Cost", {left + 150.f, top + 30.f}, 1.05f, Muted);
+        drawText("Closed", {left + 200.f, top + 30.f}, 1.05f, Muted);
+        int best = 1 << 30;
+        for (const auto& row : comparison_) if (row.found) best = std::min(best, row.cost);
+        float rowTop = top + 50.f;
+        for (const auto& row : comparison_) {
+            const sf::Color color = row.strategy == strategy_ ? OpenRing : Text;
+            drawText(strategyName(row.strategy), {left + 12.f, rowTop}, 1.2f, color, row.strategy == strategy_);
+            drawText(row.found ? std::to_string(row.cost) + (row.cost == best ? " ok" : "") : "none",
+                     {left + 150.f, rowTop}, 1.2f, row.found && row.cost == best ? Start : color);
+            drawText(std::to_string(row.closed), {left + 206.f, rowTop}, 1.2f, color);
+            rowTop += 21.f;
+        }
+        return;
+    }
+    drawText(std::string("Open set (by ") + (strategy_ == SearchStrategy::Dijkstra ? "g" : strategy_ == SearchStrategy::Greedy ? "h" : "f") +
+                 (awaiting_ ? ", by node no.)" : ", next first)"),
+             {left + 12.f, top + 8.f}, 1.15f, Muted, true);
+    auto entries = sortedOpenSet();
+    if (awaiting_) {
+        // Don't give the answer away while the student is predicting.
+        std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    }
+    if (entries.empty()) {
+        drawText("empty", {left + 12.f, top + 34.f}, 1.2f, Muted);
+    }
+    float chipLeft = left + 12.f;
+    float chipTop = top + 32.f;
+    for (std::size_t index = 0; index < entries.size(); ++index) {
+        const std::string text = std::to_string(entries[index].first) + " : " + std::to_string(entries[index].second.score.f);
+        const float width = 16.f + static_cast<float>(text.size()) * 7.f;
+        if (chipLeft + width > left + 250.f) {
+            chipLeft = left + 12.f;
+            chipTop += 24.f;
+        }
+        if (chipTop > top + 110.f) {
+            drawText("...", {chipLeft, chipTop}, 1.2f, Muted);
+            break;
+        }
+        sf::RectangleShape chip({width, 20.f});
+        chip.setPosition({chipLeft, chipTop});
+        const bool next = index == 0 && !awaiting_;
+        chip.setFillColor(next ? sf::Color(OpenRing.r, OpenRing.g, OpenRing.b, 60) : PanelLight);
+        chip.setOutlineThickness(1.5f);
+        chip.setOutlineColor(OpenRing);
+        window_.draw(chip);
+        drawText(text, {chipLeft + 8.f, chipTop + 2.f}, 1.1f, Text, next);
+        chipLeft += width + 6.f;
+    }
+    drawText(std::to_string(closedNodes_.size()) + " nodes closed", {left + 12.f, top + 116.f}, 1.05f, Muted);
+}
+
+void Application::drawChallengePanel(float left, float top) {
+    drawText("Challenges", {left, top}, 2.1f, Text, true);
+    drawWrapped("Change the graph until a challenge turns green. Checked automatically.", {left, top + 32.f},
+                1.05f, Muted, 44, 15.f);
+    float cardTop = top + 70.f;
+    for (int index = 0; index < ChallengeCount; ++index) {
+        const auto& text = Challenges[static_cast<std::size_t>(index)];
+        const auto& status = challengeStatus_[static_cast<std::size_t>(index)];
+        const bool done = challengesDone_[static_cast<std::size_t>(index)];
+        sf::RectangleShape card({258.f, 100.f});
+        card.setPosition({left, cardTop});
+        card.setFillColor(PanelLight);
+        card.setOutlineThickness(status.solved ? 2.f : 1.f);
+        card.setOutlineColor(status.solved ? Start : Edge);
+        window_.draw(card);
+        drawText(std::string(done ? "[x] " : "[ ] ") + text.title, {left + 10.f, cardTop + 7.f}, 1.25f,
+                 done ? Start : Text, true);
+        drawWrapped(text.task, {left + 10.f, cardTop + 30.f}, 1.05f, Muted, 42, 15.f);
+        drawText("Now: " + status.note, {left + 10.f, cardTop + 78.f}, 1.0f, status.solved ? Start : OpenRing);
+        cardTop += 108.f;
+    }
 }
 
 void Application::drawLegend() {
     const float top = 780.f;
-    const std::array<std::pair<sf::Color, std::string>, 5> items{{
-        {Start, "Start"}, {Goal, "Goal"}, {Expanded, "Explored"},
-        {Path, "Best path"}, {ObstacleBorder, "Movable obstacle"},
+    const std::array<std::pair<sf::Color, std::string>, 6> items{{
+        {Start, "Start"}, {Goal, "Goal"}, {OpenRing, "Open set"}, {Expanded, "Closed"},
+        {Path, "Best path"}, {ObstacleBorder, "Obstacle"},
     }};
     float left = CanvasLeft;
     for (const auto& [color, label] : items) {
@@ -897,9 +1383,11 @@ void Application::drawLegend() {
         dot.setFillColor(color);
         window_.draw(dot);
         drawText(label, {left + 19.f, top + 1.f}, 1.3f, Muted);
-        left += label.size() * 8.f + 70.f;
+        left += static_cast<float>(label.size()) * 8.f + 52.f;
     }
-    drawText("Soft red edges are blocked by an obstacle", {CanvasLeft, 814.f}, 1.2f, BlockedEdge);
+    drawText("Space play/pause   Right/Left step   Home/End   1-4 strategy   Q predict   C challenges   "
+             "N step size   S speed   R reset   G random   T theme   P code   L learn",
+             {CanvasLeft, 814.f}, 1.1f, Muted);
 }
 
 void Application::drawLearningView() {
@@ -1025,11 +1513,11 @@ void Application::drawLearningView() {
                  {left, top + 52.f}, 1.6f, Muted);
 
         const std::array<std::string, 5> experiments{{
-            "Move an obstacle onto the current best route, then rerun A*.",
-            "Add a circle and observe which intersecting edges become blocked.",
-            "Generate a random graph and compare edge costs before searching.",
-            "Enable slow mode and predict which node will be explored next.",
-            "Compare g, h, and f in the Current step panel.",
+            "Step through the search (Right arrow) and watch the open set in the sidebar.",
+            "Turn on Predict (Q): click the open node you think comes out next.",
+            "Switch strategy (1-4): which still find the cheapest path? Which close fewer nodes?",
+            "Move the start (Shift+click) and the goal (Ctrl/Cmd+click) and run again.",
+            "Open Challenges (C) and change the graph until each one turns green.",
         }};
         float experimentTop = top + 105.f;
         for (std::size_t index = 0; index < experiments.size(); ++index) {
@@ -1070,30 +1558,82 @@ void Application::drawLearningView() {
 void Application::drawNode(int nodeId) {
     const GraphNode& node = graph_.node(nodeId);
     const sf::Vector2f position = toScreen(node);
+    const auto open = openSet_.find(nodeId);
+    const bool isOpen = open != openSet_.end();
+    const bool isClosed = closedNodes_.count(nodeId) != 0U;
+    const bool onPath = atEnd() && result_->found &&
+        std::find(result_->path.begin(), result_->path.end(), nodeId) != result_->path.end();
+    const bool isEndpoint = nodeId == startNode_ || nodeId == goalNode_;
+
     sf::Color color = Node;
-    if (expandedNodes_.count(nodeId) != 0U) color = Expanded;
-    if (visiblePathNodes_.count(nodeId) != 0U) color = Path;
+    if (isClosed) color = Expanded;
+    if (onPath) color = Path;
     if (nodeId == startNode_) color = Start;
     if (nodeId == goalNode_) color = Goal;
+
+    if (isOpen && awaiting_) {
+        sf::CircleShape glow(NodeRadius + 9.f);
+        glow.setOrigin({NodeRadius + 9.f, NodeRadius + 9.f});
+        glow.setPosition(position);
+        glow.setFillColor({OpenRing.r, OpenRing.g, OpenRing.b, 70});
+        window_.draw(glow);
+    }
 
     sf::CircleShape circle(NodeRadius);
     circle.setOrigin({NodeRadius, NodeRadius});
     circle.setPosition(position);
     circle.setFillColor(color);
-    const bool isCurrent = currentScore_ && currentScore_->nodeId == nodeId;
+    const bool isCurrent = currentScore_ && currentScore_->nodeId == nodeId && !awaiting_;
     const bool isNeighbor = currentNeighbor_ == nodeId;
-    circle.setOutlineThickness(isCurrent || isNeighbor ? 4.f : 2.f);
-    circle.setOutlineColor(isCurrent ? Text : (isNeighbor ? Path : Edge));
+    if (isOpen && !isEndpoint) {
+        circle.setOutlineThickness(3.f);
+        circle.setOutlineColor(OpenRing);
+    } else {
+        circle.setOutlineThickness(isCurrent || isNeighbor ? 4.f : 2.f);
+        circle.setOutlineColor(isCurrent ? Text : (isNeighbor ? Path : Edge));
+    }
     window_.draw(circle);
+    if (isCurrent || isNeighbor) {
+        sf::CircleShape ring(NodeRadius + 5.f);
+        ring.setOrigin({NodeRadius + 5.f, NodeRadius + 5.f});
+        ring.setPosition(position);
+        ring.setFillColor(sf::Color::Transparent);
+        ring.setOutlineThickness(2.5f);
+        ring.setOutlineColor(isCurrent ? Text : Path);
+        window_.draw(ring);
+    }
 
     const std::string label = std::to_string(nodeId);
-    drawText(label, {position.x - label.size() * 3.6f, position.y - 8.f}, 1.2f, Text, true);
-    const auto score = scores_.find(nodeId);
-    if (score != scores_.end() && nodeId != startNode_ && nodeId != goalNode_) {
-        const std::string values = "g" + std::to_string(score->second.g) +
-                                   "  f" + std::to_string(score->second.f);
-        drawText(values, {position.x - values.size() * 2.7f, position.y + 22.f}, 0.9f, Text);
+    drawText(label, {position.x - static_cast<float>(label.size()) * 3.6f, position.y - 8.f}, 1.2f, Text, true);
+
+    std::optional<NodeScore> score;
+    if (isOpen) score = open->second.score;
+    else if (const auto closed = closedScores_.find(nodeId); closed != closedScores_.end()) score = closed->second;
+    if (score) {
+        const std::string values = scoreLabel(*score);
+        drawText(values, {position.x - static_cast<float>(values.size()) * 2.9f, position.y + 21.f}, 1.05f,
+                 isOpen ? OpenRing : Muted);
     }
+}
+
+float Application::drawWrapped(const std::string& text, sf::Vector2f position, float pixelSize,
+                               sf::Color color, std::size_t maxChars, float lineHeight, bool bold) {
+    std::istringstream words(text);
+    std::string word;
+    std::string line;
+    float y = position.y;
+    const auto flush = [&]() {
+        if (line.empty()) return;
+        drawText(line, {position.x, y}, pixelSize, color, bold);
+        y += lineHeight;
+        line.clear();
+    };
+    while (words >> word) {
+        if (!line.empty() && line.size() + 1 + word.size() > maxChars) flush();
+        line += (line.empty() ? "" : " ") + word;
+    }
+    flush();
+    return y - position.y;
 }
 
 void Application::drawLine(sf::Vector2f from, sf::Vector2f to, float thickness, sf::Color color) {

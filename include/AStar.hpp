@@ -36,6 +36,16 @@ struct SearchStep {
     NodeScore score{};
 };
 
+/// Which number the open set is sorted by. Only the priority changes between strategies.
+enum class SearchStrategy {
+    AStar,         ///< f = g + h  (optimal with an admissible heuristic)
+    Dijkstra,      ///< f = g      (no heuristic: h is reported as 0)
+    Greedy,        ///< f = h      (ignores the cost already paid)
+    WeightedAStar, ///< f = g + 2h (trusts the heuristic more)
+};
+
+const char* strategyName(SearchStrategy strategy);
+
 struct SearchResult {
     bool found{false};
     int cost{0};
@@ -46,7 +56,8 @@ struct SearchResult {
 
 class AStar {
 public:
-    SearchResult search(const Graph& graph, int start, int goal) const;
+    SearchResult search(const Graph& graph, int start, int goal,
+                        SearchStrategy strategy = SearchStrategy::AStar) const;
 
 private:
     static int heuristic(const GraphNode& from, const GraphNode& to);

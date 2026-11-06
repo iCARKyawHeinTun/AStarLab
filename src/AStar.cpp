@@ -19,9 +19,29 @@ struct LowerScoreFirst {
         return left.f > right.f;
     }
 };
+
+int priority(SearchStrategy strategy, int g, int h) {
+    switch (strategy) {
+    case SearchStrategy::Dijkstra: return g;
+    case SearchStrategy::Greedy: return h;
+    case SearchStrategy::WeightedAStar: return g + 2 * h;
+    case SearchStrategy::AStar: break;
+    }
+    return g + h;
+}
 } // namespace
 
-SearchResult AStar::search(const Graph& graph, int start, int goal) const {
+const char* strategyName(SearchStrategy strategy) {
+    switch (strategy) {
+    case SearchStrategy::Dijkstra: return "Dijkstra";
+    case SearchStrategy::Greedy: return "Greedy";
+    case SearchStrategy::WeightedAStar: return "Weighted A*";
+    case SearchStrategy::AStar: break;
+    }
+    return "A*";
+}
+
+SearchResult AStar::search(const Graph& graph, int start, int goal, SearchStrategy strategy) const {
     SearchResult result;
     if (start < 0 || goal < 0 || start >= static_cast<int>(graph.nodes().size()) ||
         goal >= static_cast<int>(graph.nodes().size())) {
@@ -34,11 +54,17 @@ SearchResult AStar::search(const Graph& graph, int start, int goal) const {
     std::unordered_set<int> closed;
     int sequence = 0;
 
+    const bool usesHeuristic = strategy != SearchStrategy::Dijkstra;
+    const auto estimate = [&](int nodeId) {
+        return usesHeuristic ? heuristic(graph.node(nodeId), graph.node(goal)) : 0;
+    };
+
     gScore[start] = 0;
-    const int startHeuristic = heuristic(graph.node(start), graph.node(goal));
-    frontier.push({start, startHeuristic, sequence++});
+    const int startHeuristic = estimate(start);
+    const int startPriority = priority(strategy, 0, startHeuristic);
+    frontier.push({start, startPriority, sequence++});
     result.steps.push_back({SearchStepType::Initialize, 1, start, -1, 0, 0, -1, true,
-                            {start, 0, startHeuristic, startHeuristic}});
+                            {start, 0, startHeuristic, startPriority}});
 
     while (!frontier.empty()) {
         result.steps.push_back({SearchStepType::BeginLoop, 2});
@@ -46,8 +72,8 @@ SearchResult AStar::search(const Graph& graph, int start, int goal) const {
         frontier.pop();
         if (closed.count(current) != 0U) continue;
 
-        const int h = heuristic(graph.node(current), graph.node(goal));
-        const NodeScore currentScore{current, gScore[current], h, gScore[current] + h};
+        const int h = estimate(current);
+        const NodeScore currentScore{current, gScore[current], h, priority(strategy, gScore[current], h)};
         closed.insert(current);
         result.expanded.push_back(currentScore);
         result.steps.push_back({SearchStepType::SelectCurrent, 3, current, -1, 0, 0, -1,
@@ -85,9 +111,10 @@ SearchResult AStar::search(const Graph& graph, int start, int goal) const {
             if (improved) {
                 cameFrom[neighbor] = current;
                 gScore[neighbor] = tentative;
-                const int estimate = heuristic(graph.node(neighbor), graph.node(goal));
-                const NodeScore neighborScore{neighbor, tentative, estimate, tentative + estimate};
-                frontier.push({neighbor, tentative + estimate, sequence++});
+                const int neighborH = estimate(neighbor);
+                const int neighborPriority = priority(strategy, tentative, neighborH);
+                const NodeScore neighborScore{neighbor, tentative, neighborH, neighborPriority};
+                frontier.push({neighbor, neighborPriority, sequence++});
                 result.steps.push_back({SearchStepType::UpdateNeighbor, 9, current, neighbor,
                                         edgeCost, tentative, previous, true, neighborScore});
             }

@@ -108,8 +108,8 @@
   }
 
   // ------------------------------------------------------------------ search playback
-  /** A* runs on the shared C++ core (when it loaded); the comparison strategies use the JavaScript engine. */
-  const engineFor = (strategy) => (strategy === "astar" && state.engine ? state.engine : state.jsEngine);
+  /** Every strategy runs on the shared C++ core when it loaded (older builds only had A*); otherwise the JavaScript engine. */
+  const engineFor = (strategy) => (state.engine && (strategy === "astar" || state.engine.supportsStrategies) ? state.engine : state.jsEngine);
 
   function ensureResult() {
     if (!state.result) state.result = engineFor(state.strategy).search(state.nodes, state.edges, state.start, state.goal, state.strategy);
@@ -291,7 +291,7 @@
     elements["strategy-name"].textContent = AStarEngine.Strategies[state.strategy].name;
     elements["pop-name"].textContent = st.pop;
     elements["priority-name"].textContent = st.key;
-    elements["engine-badge"].textContent = engineFor(state.strategy).kind + (state.strategy !== "astar" ? " (comparison strategies)" : "");
+    elements["engine-badge"].textContent = engineFor(state.strategy).kind;
     elements.pseudocode.querySelectorAll("li").forEach((item) => {
       item.classList.toggle("active", Number(item.dataset.line) === state.activeLine);
     });
@@ -348,7 +348,7 @@
       check: () => {
         const free = evaluate("astar", state.edges.map((e) => ({ ...e, enabled: true })));
         const now = evaluate("astar");
-        return { ok: now.found && now.cost >= free.cost + 20, note: now.found ? `now ${now.cost}, needs ≥ ${free.cost + 20}` : "no path at all (that's a different challenge!)" };
+        return { ok: now.found && now.cost >= free.cost + 20, note: now.found ? `cost ${now.cost}, needs ≥ ${free.cost + 20}` : "no path at all (that's a different challenge!)" };
       } },
     { id: "one", title: "One obstacle is enough", text: "With exactly ONE obstacle on the board, make the goal unreachable.",
       hint: "Count the edges that touch the goal. How many would you need to block?",

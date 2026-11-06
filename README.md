@@ -22,12 +22,12 @@ Use it as a native desktop application or in a browser. The deployed website run
 - Four-part in-app **Learn A*** guide
 - Tools for adding and deleting circular or rectangular obstacles
 - Dark mode by default, with an optional light theme
-- Slow line-by-line educational playback by default, with grouped faster playback
+- Step-by-step playback: play/pause, step forward and back, five speeds, by pseudocode line or by expanded node
 - Resizable and maximizable window with proportional responsive scaling
 - Final path cost and expanded-node statistics
 - Side-by-side pseudocode that highlights the line currently running
 - Live current-node, neighbor, and `g`, `h`, `f` values synchronized with the search
-- Cancel control during playback, with graph and obstacle editing locked until cancellation
+- Open set drawn on the graph and listed in priority order; predict mode; four search strategies with a comparison table; five auto-checked challenges; selectable start and goal
 - Unit tests for reachable, blocked, and detour scenarios
 - Cross-platform CMake project for macOS, Windows, and Linux
 - Browser version powered by the shared C++ engine compiled to WebAssembly
@@ -39,7 +39,7 @@ The browser version adds tools that turn watching into thinking:
 - **Full playback control**: play/pause, step forward and **back**, restart, finish, a speed slider, and stepping by pseudocode line or by expanded node
 - **Visible open set**: frontier nodes have dashed rings, every node shows its `g + h = f` calculation, and a panel lists the open set in priority order
 - **🤔 Predict mode**: before each expansion, click the open node you think comes out next. Wrong guesses get a hint, not the answer
-- **Strategy comparison**: run Dijkstra (`f = g`), Greedy (`f = h`), or Weighted A* (`f = g + 2h`) on the same graph, with a cost / nodes-closed table for all four after every run. A* runs on the shared C++ core; the comparison strategies run on the JavaScript engine
+- **Strategy comparison**: run Dijkstra (`f = g`), Greedy (`f = h`), or Weighted A* (`f = g + 2h`) on the same graph, with a cost / nodes-closed table for all four after every run. All four strategies live in the shared C++ core (`SearchStrategy` in `AStar.hpp`), so the desktop app, the WebAssembly build, and the JavaScript fallback give identical results
 - **🎯 Challenges**: five auto-checked goals that make you change the graph (detours, cutting off the goal, making Greedy fail, making the heuristic pay off)
 - **Choose start and goal nodes**, and edit obstacles at any time (the search simply restarts)
 - Larger canvas text on small screens
@@ -57,20 +57,26 @@ The browser version adds tools that turn watching into thinking:
 
 ## Controls (desktop app)
 
+The desktop app has the same learning tools as the browser version: step-by-step playback (forward **and back**), the open set drawn on the graph and listed in the sidebar, predict mode, four strategies with a comparison table, five challenges, and selectable start and goal nodes.
+
 | Action | Mouse / keyboard |
 | --- | --- |
-| Move an obstacle | Left-drag a circle or rectangle |
-| Run or cancel A* | `Space`, `Enter`, or **Run/Cancel** |
+| Play / pause | `Space` (or `Enter`), or **Play** |
+| Step forward / back | `Right` / `Left`, or **Step >** / **< Back** |
+| Restart / jump to the end | `Home` / `End`, or **Finish** |
+| Step one line or one expanded node | `N` or **Step: line / node** |
+| Playback speed (1–5) | `S` or **Speed** |
+| Choose a strategy | `1` A*, `2` Dijkstra, `3` Greedy, `4` Weighted A*, or **Strategy** |
+| Predict the next node | `Q` or **Predict**, then click an amber-ringed node |
+| Challenges | `C` or **Challenges** |
+| Move an obstacle | Left-drag a circle or rectangle (any time, even while playing) |
+| Add / delete obstacles | **Edit graph** menu, or right-click an obstacle to delete it |
+| Set the start / goal node | `Shift`+click / `Ctrl`/`Cmd`+click a node, or **Edit graph** |
 | Restore the demonstration | `R` or **Reset** |
 | Randomize nodes and costs | `G` or **Random** |
-| Add a circular obstacle | Open **Obstacles**, choose **Add circle**, then click the graph |
-| Add a rectangular obstacle | Open **Obstacles**, choose **Add rectangle**, then click the graph |
-| Delete an obstacle | Open **Obstacles**, choose **Delete obstacle**, or right-click it |
-| Open the A* lessons | `L` or **Learn A*** |
-| Change lesson page | `Left` / `Right` arrow or the lesson buttons |
-| Toggle light/dark mode | `T` or the compact **Light/Dark** control |
-| Change playback speed | `S` or the compact **Faster/Slower** control |
-| Show or hide synchronized pseudocode | `P` or **Hide code/Show code** |
+| Open the A* lessons | `L` or **Learn A*** (`Left` / `Right` change page) |
+| Toggle light/dark mode | `T` |
+| Show or hide pseudocode | `P` |
 
 ## Build and run
 
