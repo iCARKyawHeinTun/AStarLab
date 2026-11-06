@@ -232,6 +232,12 @@ kbd { padding: 0 5px; border: 1px solid var(--edge); border-bottom-width: 2px; b
 .compare-box th:first-child, .compare-box td:first-child { text-align: left; }
 .compare-box th { color: var(--muted); font-weight: 600; font-size: .74rem; }
 .compare-box tr.current td { font-weight: 700; color: var(--open); }
+.strategy-help { flex-basis: 100%; margin: 0; padding: 8px 12px; border-left: 3px solid var(--open); border-radius: 0 8px 8px 0; background: var(--panel-soft); color: var(--muted); font-size: .88rem; }
+.strategy-help b { color: var(--text); }
+.strategy-table { width: 100%; margin: 12px 0; border-collapse: collapse; font-size: .86rem; }
+.strategy-table th, .strategy-table td { padding: 7px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, var(--edge) 55%, transparent); color: var(--muted); }
+.strategy-table th { color: var(--text); font-size: .78rem; }
+.strategy-table td b { color: var(--text); }
 .challenge-panel { margin-top: 20px; padding: 20px 22px; border: 1px solid var(--open); border-radius: 14px; background: var(--panel); box-shadow: 0 12px 36px var(--shadow); }
 .challenge-panel[hidden] { display: none; }
 .challenge-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin: 14px 0 0; padding: 0; list-style: none; }

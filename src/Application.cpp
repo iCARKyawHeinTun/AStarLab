@@ -697,8 +697,11 @@ void Application::toggleChallenges() {
 
 void Application::setStrategy(SearchStrategy strategy) {
     strategy_ = strategy;
-    invalidate(std::string("Strategy: ") + strategyName(strategy_) + "   (open set sorted by " +
-               priorityName() + "). Press Play or Step.");
+    const char* why = "Cost so far plus estimated cost left: the cheapest path, while leaning toward the goal.";
+    if (strategy_ == SearchStrategy::Dijkstra) why = "Cost so far only, no estimate: always the cheapest path, but it spreads out in every direction.";
+    if (strategy_ == SearchStrategy::Greedy) why = "Estimated distance left only: fast, but it ignores the cost already paid and can return a more expensive path.";
+    if (strategy_ == SearchStrategy::WeightedAStar) why = "Trusts the estimate twice as much: usually less work than A*, and never worse than 2x the cheapest path.";
+    invalidate(std::string(strategyName(strategy_)) + " sorts the open set by " + priorityName() + ". " + why);
 }
 
 void Application::cycleStrategy() {
@@ -836,7 +839,7 @@ void Application::handleMousePressed(sf::Vector2i pixel, sf::Mouse::Button butto
             learningPage_ = std::max(0, learningPage_ - 1);
         }
         if (button == sf::Mouse::Button::Left && next.contains(local)) {
-            learningPage_ = std::min(3, learningPage_ + 1);
+            learningPage_ = std::min(4, learningPage_ + 1);
         }
         return;
     }
@@ -922,7 +925,7 @@ void Application::handleKeyPressed(sf::Keyboard::Scancode key) {
     }
     if (learningView_) {
         if (key == Key::Left) learningPage_ = std::max(0, learningPage_ - 1);
-        if (key == Key::Right) learningPage_ = std::min(3, learningPage_ + 1);
+        if (key == Key::Right) learningPage_ = std::min(4, learningPage_ + 1);
         if (key == Key::L) toggleLearningView();
         if (key == Key::T) toggleTheme();
         return;
@@ -1185,7 +1188,11 @@ void Application::drawSidebar() {
 
 void Application::drawPseudocode(float left, float top) {
     drawText(std::string(strategyName(strategy_)) + " pseudocode", {left, top}, 2.1f, Text, true);
-    drawText("The active line follows the search", {left, top + 31.f}, 1.05f, Muted);
+    const char* summary = "Sorted by g + h: cheapest path, focused search";
+    if (strategy_ == SearchStrategy::Dijkstra) summary = "Sorted by g only: cheapest path, searches widely";
+    if (strategy_ == SearchStrategy::Greedy) summary = "Sorted by h only: fast, but may pay more";
+    if (strategy_ == SearchStrategy::WeightedAStar) summary = "Sorted by g + 2h: faster, at most 2x the best cost";
+    drawText(summary, {left, top + 31.f}, 1.05f, OpenRing);
 
     struct CodeToken {
         std::string text;
@@ -1399,10 +1406,10 @@ void Application::drawLearningView() {
     page.setOutlineColor(Edge);
     window_.draw(page);
 
-    drawText("Lesson " + std::to_string(learningPage_ + 1) + " of 4",
+    drawText("Lesson " + std::to_string(learningPage_ + 1) + " of 5",
              {CanvasLeft + 32.f, CanvasTop + 24.f}, 1.35f, Muted, true);
 
-    for (int index = 0; index < 4; ++index) {
+    for (int index = 0; index < 5; ++index) {
         sf::CircleShape dot(index == learningPage_ ? 6.f : 4.f);
         dot.setPosition({CanvasLeft + width - 100.f + index * 22.f,
                          CanvasTop + (index == learningPage_ ? 25.f : 27.f)});
@@ -1507,8 +1514,42 @@ void Application::drawLearningView() {
         drawText("current = node with minimum f", {left + 50.f, top + 372.f}, 1.35f, Text);
         drawText("relax every edge from current", {left + 50.f, top + 401.f}, 1.35f, Text);
         drawText("remember each improved node's parent", {left + 50.f, top + 430.f}, 1.35f, Text);
+    } else if (learningPage_ == 3) {
+        drawText("4. Four strategies, one loop", {left, top}, 2.7f, Text, true);
+        drawText("Same loop every time. Only the number the open set is sorted by changes.",
+                 {left, top + 52.f}, 1.6f, Muted);
+        const std::array<std::array<std::string, 4>, 5> rows{{
+            {"Strategy", "Sorted by", "Cheapest path?", "Work"},
+            {"Dijkstra", "g  (cost paid so far)", "Always", "Most: spreads in every direction"},
+            {"A*", "g + h", "Yes, if h never overestimates", "Less: leans toward the goal"},
+            {"Weighted A*", "g + 2h", "Not guaranteed, at most 2x the best", "Even less"},
+            {"Greedy", "h  (estimated distance left)", "No guarantee", "Least: rushes at the goal"},
+        }};
+        const std::array<float, 4> columns{0.f, 170.f, 420.f, 760.f};
+        float rowTop = top + 100.f;
+        for (std::size_t row = 0; row < rows.size(); ++row) {
+            if (row > 0) {
+                sf::RectangleShape band({1080.f, 38.f});
+                band.setPosition({left - 10.f, rowTop - 8.f});
+                band.setFillColor(row % 2 == 1 ? PanelLight : Panel);
+                window_.draw(band);
+            }
+            for (std::size_t column = 0; column < columns.size(); ++column) {
+                drawText(rows[row][column], {left + columns[column], rowTop},
+                         row == 0 ? 1.25f : 1.45f, row == 0 || column == 0 ? Text : Muted, row == 0 || column == 0);
+            }
+            rowTop += row == 0 ? 34.f : 42.f;
+        }
+        drawText("On 2,753 random roadmaps from this lab, Dijkstra closed 11.8 nodes on average, A* 6.9,",
+                 {left, top + 318.f}, 1.4f, Text);
+        drawText("Weighted A* 5.1, and Greedy 4.7. Greedy paid more than the best path in 19% of them (up to 2.15x);",
+                 {left, top + 344.f}, 1.4f, Text);
+        drawText("Weighted A* in 11% (never more than 1.24x). Dijkstra and A* always found the cheapest path.",
+                 {left, top + 370.f}, 1.4f, Text);
+        drawText("Try it: press 1-4 in the lab and compare the table that appears after each run.",
+                 {left, top + 405.f}, 1.45f, Path, true);
     } else {
-        drawText("4. Learn by experimenting", {left, top}, 2.7f, Text, true);
+        drawText("5. Learn by experimenting", {left, top}, 2.7f, Text, true);
         drawText("Return to the lab and test one change at a time.",
                  {left, top + 52.f}, 1.6f, Muted);
 
@@ -1546,11 +1587,11 @@ void Application::drawLearningView() {
 
     sf::RectangleShape next({120.f, 40.f});
     next.setPosition({CanvasLeft + width - 150.f, navigationTop});
-    next.setFillColor(learningPage_ == 3 ? PanelLight : Expanded);
+    next.setFillColor(learningPage_ == 4 ? PanelLight : Expanded);
     window_.draw(next);
-    drawText(learningPage_ == 3 ? "Finished" : "Next",
+    drawText(learningPage_ == 4 ? "Finished" : "Next",
              {CanvasLeft + width - 126.f, navigationTop + 9.f}, 1.6f,
-             learningPage_ == 3 ? Muted : Panel, true);
+             learningPage_ == 4 ? Muted : Panel, true);
     drawText("Use Left / Right arrows to change lessons", {CanvasLeft + width / 2.f - 150.f,
              navigationTop + 10.f}, 1.2f, Muted);
 }

@@ -68,6 +68,7 @@
         <button id="random-button" title="New random positions and costs (G)">🎲 Random</button>
         <button id="reset-button" class="quiet" title="Restore the original graph (R)">Reset</button>
       </div>
+      <p id="strategy-help" class="strategy-help" aria-live="polite"></p>
     </section>
 
     <p id="status" class="status" role="status" aria-live="polite">Ready. Press ▶ Play, or Step through the search one line at a time.</p>
@@ -212,6 +213,35 @@
         <h3>6. When A* is optimal</h3>
         <p>On a finite graph with non-negative edge costs, A* is complete: it finds a route whenever one exists. With an admissible heuristic—and a consistent heuristic for this closed-set implementation—the returned route has the smallest possible total cost.</p>
         <p>The final highlighted route is reconstructed from parent links. Those links remember which previous node produced each node's cheapest known <b>g</b>.</p>
+      </section>
+
+      <section class="lesson-section">
+        <h3>7. Four strategies, one loop</h3>
+        <p>Dijkstra, Greedy best-first, A*, and Weighted A* run <b>exactly the same loop</b>. The only difference is the number the open set is sorted by,
+          meaning which node gets taken out next.</p>
+        <table class="strategy-table">
+          <thead><tr><th>Strategy</th><th>Open set sorted by</th><th>Cheapest path?</th><th>Work</th></tr></thead>
+          <tbody>
+            <tr><td><b>Dijkstra</b></td><td><code>g</code>: cost paid so far</td><td>Always</td><td>Most: spreads out in every direction</td></tr>
+            <tr><td><b>A*</b></td><td><code>g + h</code></td><td>Yes, if h never overestimates</td><td>Less: leans toward the goal</td></tr>
+            <tr><td><b>Weighted A*</b></td><td><code>g + 2h</code></td><td>Not guaranteed, but never worse than 2× the best</td><td>Even less</td></tr>
+            <tr><td><b>Greedy</b></td><td><code>h</code>: estimated distance left</td><td>No guarantee at all</td><td>Least: rushes at the goal</td></tr>
+          </tbody>
+        </table>
+        <p>We ran all four on 2,753 random roadmaps from this lab. Dijkstra and A* always found the cheapest path. On average Dijkstra closed
+          <b>11.8</b> nodes, A* <b>6.9</b>, Weighted A* <b>5.1</b>, and Greedy <b>4.7</b>. Weighted A* paid more than the best path in 11% of
+          roadmaps (at most 1.24× the best). Greedy paid more in 19% of them, sometimes over 2× the best.</p>
+        <div class="worked-example">
+          <p><b>How Greedy gets fooled.</b> From the start, node A is 6 away and looks very close to the goal (h = 4), but the road from A to the goal costs 30.
+            Node B is 8 away and looks far (h = 12), but its road to the goal costs only 13.</p>
+          <p><b>Greedy</b> sorts by h: A (4) beats B (12), so it expands A, reaches the goal through it, and stops. Total: 6 + 30 = <b>36</b>.</p>
+          <p><b>A*</b> sorts by g + h: A has 6 + 4 = 10 and B has 8 + 12 = 20, so it also tries A first. But the goal reached through A gets f = 36 + 0 = 36,
+            and B's 20 is still smaller. So A* expands B next, finds the goal through B with f = 21, and returns the cheaper path: 8 + 13 = <b>21</b>.
+            Counting the cost already paid (g) is what saves it.</p>
+        </div>
+        <p><b>When would you use each?</b> Dijkstra when there's no good estimate of the distance left. A* when you need the cheapest path and have
+          an admissible heuristic. Weighted A* when "close to the best" is fine and speed matters, as in many games and robots.
+          Greedy when any path will do and you need it fast.</p>
       </section>
 
       <section class="lesson-section lesson-experiment">

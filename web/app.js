@@ -21,6 +21,12 @@
     weighted: { pop: "popLowestF", key: "f = g + 2h", label: (s) => `${s.g}+2·${s.h}=${s.f}` },
   };
   const SPEED_MS = { line: [1100, 650, 380, 180, 60], node: [1600, 1000, 600, 300, 120] };
+  const STRATEGY_HELP = {
+    astar: "<b>A*</b> sorts the open set by <b>g + h</b>: cost so far plus estimated cost left. It always finds the cheapest path (h never overestimates here) while leaning toward the goal.",
+    dijkstra: "<b>Dijkstra</b> sorts by <b>g</b> only: the cost paid so far. No estimate, so it spreads out in every direction. Always the cheapest path, but the most work.",
+    greedy: "<b>Greedy</b> sorts by <b>h</b> only: how close a node <i>looks</i> to the goal. It ignores the cost already paid, so it's fast but can return a more expensive path.",
+    weighted: "<b>Weighted A*</b> sorts by <b>g + 2h</b>: it trusts the estimate twice as much. Usually less work than A*, and its path is never worse than 2× the cheapest.",
+  };
 
   const $ = (id) => document.getElementById(id);
   const elements = Object.fromEntries([
@@ -29,7 +35,7 @@
     "learn-button", "theme-button", "code-button", "challenge-button", "challenge-count", "challenge-panel", "close-challenges", "challenge-list",
     "status", "workspace", "algorithm-panel", "graph-canvas", "engine-badge", "strategy-name", "pop-name", "priority-name",
     "pseudocode", "active-nodes", "g-value", "h-value", "f-value", "calc-line", "open-set", "closed-count",
-    "compare-box", "compare-table", "learn-dialog", "close-learn",
+    "compare-box", "compare-table", "learn-dialog", "close-learn", "strategy-help",
   ].map((id) => [id, $(id)]));
   const canvas = elements["graph-canvas"];
   const ctx = canvas.getContext("2d");
@@ -289,6 +295,10 @@
   function updatePanel() {
     const st = STRATEGY_TEXT[state.strategy];
     elements["strategy-name"].textContent = AStarEngine.Strategies[state.strategy].name;
+    if (elements["strategy-help"].dataset.for !== state.strategy) {
+      elements["strategy-help"].innerHTML = STRATEGY_HELP[state.strategy];
+      elements["strategy-help"].dataset.for = state.strategy;
+    }
     elements["pop-name"].textContent = st.pop;
     elements["priority-name"].textContent = st.key;
     elements["engine-badge"].textContent = engineFor(state.strategy).kind;
