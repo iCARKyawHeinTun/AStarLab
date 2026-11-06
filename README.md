@@ -32,7 +32,30 @@ Use it as a native desktop application or in a browser. The deployed website run
 - Cross-platform CMake project for macOS, Windows, and Linux
 - Browser version powered by the shared C++ engine compiled to WebAssembly
 
-## Controls
+### Browser version extras
+
+The browser version adds tools that turn watching into thinking:
+
+- **Full playback control**: play/pause, step forward and **back**, restart, finish, a speed slider, and stepping by pseudocode line or by expanded node
+- **Visible open set**: frontier nodes have dashed rings, every node shows its `g + h = f` calculation, and a panel lists the open set in priority order
+- **🤔 Predict mode**: before each expansion, click the open node you think comes out next. Wrong guesses get a hint, not the answer
+- **Strategy comparison**: run Dijkstra (`f = g`), Greedy (`f = h`), or Weighted A* (`f = g + 2h`) on the same graph, with a cost / nodes-closed table for all four after every run. A* runs on the shared C++ core; the comparison strategies run on the JavaScript engine
+- **🎯 Challenges**: five auto-checked goals that make you change the graph (detours, cutting off the goal, making Greedy fail, making the heuristic pay off)
+- **Choose start and goal nodes**, and edit obstacles at any time (the search simply restarts)
+- Larger canvas text on small screens
+
+| Action (browser) | Mouse / keyboard |
+| --- | --- |
+| Play / pause | `Space` or **▶ Play** |
+| Step forward / back | `→` / `←`, or **Step ▶** / **◀** |
+| Restart / jump to the end | `Home` / `End`, or **⏮** / **Finish** |
+| Predict the next node | Turn on **🤔 Predict mode**, then click a dashed node |
+| Change strategy | **Strategy** menu |
+| Move start or goal | **Mouse → Set start node / Set goal node**, then click a node |
+| Add / delete obstacles | **Mouse** menu, or right-click an obstacle to delete it |
+| Challenges | **🎯 Challenges** |
+
+## Controls (desktop app)
 
 | Action | Mouse / keyboard |
 | --- | --- |

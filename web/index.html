@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="An interactive A* pathfinding laboratory for learning weighted graph search.">
   <title>AStarLab — Interactive A* Visualizer</title>
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
   <script defer src="generated/astar-core.js?v=3"></script>
-  <script defer src="astar-engine.js?v=3"></script>
-  <script defer src="app.js?v=4"></script>
+  <script defer src="astar-engine.js?v=4"></script>
+  <script defer src="app.js?v=5"></script>
 </head>
 <body>
   <header class="site-header">
@@ -16,28 +16,61 @@
       <h1>AStarLab</h1>
       <p>See every decision behind the shortest path.</p>
     </div>
-    <nav class="toolbar" aria-label="Lab controls">
-      <button id="run-button" class="primary" disabled>Run</button>
-      <button id="random-button">Random</button>
-      <label class="select-control">
-        <span>Obstacles</span>
-        <select id="obstacle-tool" aria-label="Obstacle tool">
-          <option value="move">Move</option>
-          <option value="circle">Add circle</option>
-          <option value="rectangle">Add rectangle</option>
-          <option value="delete">Delete</option>
-        </select>
-      </label>
-      <button id="learn-button">Learn A*</button>
-      <button id="reset-button" class="quiet">Reset</button>
-      <button id="theme-button" class="quiet">Light</button>
-      <button id="speed-button" class="quiet" aria-pressed="false">Faster</button>
+    <nav class="toolbar" aria-label="Page controls">
+      <button id="learn-button">📖 Learn A*</button>
+      <button id="challenge-button" aria-controls="challenge-panel" aria-expanded="false">🎯 Challenges <span id="challenge-count" class="count-pill">0/5</span></button>
       <button id="code-button" class="quiet" aria-pressed="true" aria-controls="algorithm-panel">Hide code</button>
+      <button id="theme-button" class="quiet" aria-label="Switch to light theme">☀︎</button>
     </nav>
   </header>
 
   <main>
-    <p id="status" class="status" role="status" aria-live="polite">Ready — move an obstacle or run the search</p>
+    <section class="controls" aria-label="Search controls">
+      <div class="control-group" role="group" aria-label="Playback">
+        <button id="restart-button" class="icon" aria-label="Back to the start of the search" title="Restart (Home)">⏮</button>
+        <button id="back-button" class="icon" aria-label="Step back" title="Step back (←)">◀</button>
+        <button id="run-button" class="primary" disabled title="Play / pause (Space)">▶ Play</button>
+        <button id="step-button" title="Step forward (→)">Step ▶</button>
+        <button id="finish-button" class="quiet" title="Jump to the end (End)">Finish</button>
+      </div>
+      <div class="control-group">
+        <label class="select-control" title="How far one Step goes">
+          <span>Step by</span>
+          <select id="detail-select" aria-label="Step size">
+            <option value="line">pseudocode line</option>
+            <option value="node">expanded node</option>
+          </select>
+        </label>
+        <label class="range-control"><span>Speed</span><input id="speed-input" type="range" min="1" max="5" step="1" value="3" aria-label="Playback speed"></label>
+        <label class="toggle"><input id="predict-input" type="checkbox"> <span>🤔 Predict mode</span></label>
+      </div>
+      <div class="control-group">
+        <label class="select-control">
+          <span>Strategy</span>
+          <select id="strategy-select" aria-label="Search strategy">
+            <option value="astar">A*  (f = g + h)</option>
+            <option value="dijkstra">Dijkstra  (f = g)</option>
+            <option value="greedy">Greedy  (f = h)</option>
+            <option value="weighted">Weighted A*  (f = g + 2h)</option>
+          </select>
+        </label>
+        <label class="select-control">
+          <span>Mouse</span>
+          <select id="obstacle-tool" aria-label="What clicking on the graph does">
+            <option value="move">Move obstacles</option>
+            <option value="circle">Add circle</option>
+            <option value="rectangle">Add rectangle</option>
+            <option value="delete">Delete obstacle</option>
+            <option value="start">Set start node</option>
+            <option value="goal">Set goal node</option>
+          </select>
+        </label>
+        <button id="random-button" title="New random positions and costs (G)">🎲 Random</button>
+        <button id="reset-button" class="quiet" title="Restore the original graph (R)">Reset</button>
+      </div>
+    </section>
+
+    <p id="status" class="status" role="status" aria-live="polite">Ready. Press ▶ Play, or Step through the search one line at a time.</p>
     <div id="workspace" class="workspace">
       <section class="canvas-region" aria-label="Weighted graph visualization">
         <canvas id="graph-canvas" width="910" height="570">
@@ -46,21 +79,23 @@
         <div class="legend" aria-label="Graph legend">
           <span><i class="start"></i>Start</span>
           <span><i class="goal"></i>Goal</span>
-          <span><i class="explored"></i>Explored</span>
+          <span><i class="open"></i>Open set (frontier)</span>
+          <span><i class="explored"></i>Closed (expanded)</span>
           <span><i class="path"></i>Best path</span>
-          <span><i class="obstacle"></i>Obstacle</span>
+          <span><i class="obstacle"></i>Obstacle (drag me)</span>
         </div>
+        <p class="keys">Keyboard: <kbd>Space</kbd> play/pause · <kbd>→</kbd> step · <kbd>←</kbd> back · <kbd>R</kbd> reset · <kbd>G</kbd> random · <kbd>L</kbd> learn</p>
       </section>
 
-      <aside id="algorithm-panel" class="algorithm-panel" aria-label="Synchronized A star pseudocode">
+      <aside id="algorithm-panel" class="algorithm-panel" aria-label="Synchronized pseudocode and search state">
         <div class="panel-heading">
-          <h2>A* pseudocode</h2>
+          <h2><span id="strategy-name">A*</span> pseudocode</h2>
           <span id="engine-badge">Loading C++ core…</span>
         </div>
         <ol id="pseudocode" class="pseudocode">
           <li data-line="1"><code><span class="syntax-variable">openSet</span> <span class="syntax-operator">=</span> <span class="syntax-function">PriorityQueue</span>({ <span class="syntax-variable">start</span> })</code></li>
           <li data-line="2"><code><span class="syntax-keyword">while not</span> <span class="syntax-variable">openSet</span>.<span class="syntax-function">empty</span>():</code></li>
-          <li data-line="3" class="indent-1"><code><span class="syntax-variable">current</span> <span class="syntax-operator">=</span> <span class="syntax-variable">openSet</span>.<span class="syntax-function">popLowestF</span>()</code></li>
+          <li data-line="3" class="indent-1"><code><span class="syntax-variable">current</span> <span class="syntax-operator">=</span> <span class="syntax-variable">openSet</span>.<span class="syntax-function" id="pop-name">popLowestF</span>()</code></li>
           <li data-line="4" class="indent-1"><code><span class="syntax-keyword">if</span> <span class="syntax-variable">current</span> <span class="syntax-operator">==</span> <span class="syntax-variable">goal</span>:</code></li>
           <li data-line="5" class="indent-2"><code><span class="syntax-keyword">return</span> <span class="syntax-function">reconstructPath</span>(<span class="syntax-variable">current</span>)</code></li>
           <li data-line="6" class="indent-1"><code><span class="syntax-keyword">for</span> <span class="syntax-variable">neighbor</span> <span class="syntax-keyword">in</span> <span class="syntax-function">neighbors</span>(<span class="syntax-variable">current</span>):</code></li>
@@ -69,16 +104,39 @@
           <li data-line="9" class="indent-3"><code><span class="syntax-function">updateScoresAndParent</span>(<span class="syntax-variable">neighbor</span>, <span class="syntax-variable">tentativeG</span>)</code></li>
         </ol>
         <section class="live-values" aria-label="Current search values">
-          <h3>Live values</h3>
-          <p id="active-nodes">Run the search to begin</p>
+          <h3>Right now</h3>
+          <p id="active-nodes">Press Step to begin</p>
           <dl>
             <div><dt>g</dt><dd id="g-value">—</dd></div>
             <div><dt>h</dt><dd id="h-value">—</dd></div>
             <div><dt>f</dt><dd id="f-value">—</dd></div>
           </dl>
+          <p id="calc-line" class="calc-line"></p>
+        </section>
+        <section class="open-list" aria-label="Open set">
+          <h3>Open set <span class="muted-note">sorted by <span id="priority-name">f</span>, next out first</span></h3>
+          <div id="open-set" class="chips"><span class="muted-note">empty</span></div>
+          <p class="muted-note"><span id="closed-count">0</span> nodes closed</p>
+        </section>
+        <section id="compare-box" class="compare-box" hidden aria-label="Strategy comparison">
+          <h3>Same graph, every strategy</h3>
+          <table id="compare-table"></table>
         </section>
       </aside>
     </div>
+
+    <aside id="challenge-panel" class="challenge-panel" hidden aria-label="Challenges">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">Think like a scientist</span>
+          <h2>Challenges</h2>
+        </div>
+        <button id="close-challenges" aria-label="Close challenges">Close</button>
+      </div>
+      <p class="muted-note">Change the graph (move, add, or delete obstacles; set start and goal; or press Random) until a challenge turns green.
+        They're checked automatically every time the graph changes. When one turns green, explain to yourself <em>why</em> it worked.</p>
+      <ol id="challenge-list" class="challenge-list"></ol>
+    </aside>
   </main>
 
   <dialog id="learn-dialog">
@@ -158,7 +216,12 @@
 
       <section class="lesson-section lesson-experiment">
         <h3>Try it in the lab</h3>
-        <p>Use Slower mode and predict the next node from the visible <b>f</b> values. Then move an obstacle onto the best route and run again. Watch which edges become blocked, which nodes are expanded, and how the final cost changes.</p>
+        <ol class="algorithm-steps">
+          <li><b>Step through it.</b> Use <b>Step ▶</b> (or the → key) and watch the open set on the right. The dashed nodes on the graph are the frontier.</li>
+          <li><b>Predict.</b> Turn on <b>🤔 Predict mode</b>. Before each node is expanded, you must click the open node you think comes out next. Check the f values!</li>
+          <li><b>Compare strategies.</b> Switch <b>Strategy</b> to Dijkstra, Greedy, or Weighted A*. Which still find the cheapest path? Which expand fewer nodes? The table after each run compares all four.</li>
+          <li><b>Break it.</b> Open <b>🎯 Challenges</b> and change the graph until each one turns green.</li>
+        </ol>
       </section>
     </article>
   </dialog>

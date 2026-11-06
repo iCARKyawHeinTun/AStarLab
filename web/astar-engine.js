@@ -10,10 +10,21 @@
   const score = (nodeId = 0, g = 0, h = 0, f = 0) => ({ nodeId, g, h, f });
   const heuristic = (a, b) => Math.floor(Math.hypot(a.x - b.x, a.y - b.y) / 10);
 
+  // Search strategies. Each one only changes the number the open set is sorted by.
+  // "f" in the returned scores is always that priority, so the UI can show it.
+  const Strategies = Object.freeze({
+    astar: { name: "A*", label: "A*  (f = g + h)", priority: (g, h) => g + h, usesH: true },
+    dijkstra: { name: "Dijkstra", label: "Dijkstra  (f = g, no heuristic)", priority: (g) => g, usesH: false },
+    greedy: { name: "Greedy", label: "Greedy best-first  (f = h)", priority: (g, h) => h, usesH: true },
+    weighted: { name: "Weighted A*", label: "Weighted A*  (f = g + 2h)", priority: (g, h) => g + 2 * h, usesH: true },
+  });
+
   class JavaScriptEngine {
     constructor() { this.kind = "JavaScript fallback"; }
 
-    search(nodes, edges, start, goal) {
+    search(nodes, edges, start, goal, strategy = "astar") {
+      const strat = Strategies[strategy] || Strategies.astar;
+      const hOf = id => (strat.usesH ? heuristic(nodes[id], nodes[goal]) : 0);
       const result = { found: false, cost: 0, expanded: [], path: [], steps: [] };
       const neighbors = Array.from({ length: nodes.length }, () => []);
       for (const edge of edges) {
@@ -27,18 +38,19 @@
       const cameFrom = new Map();
       const closed = new Set();
       let sequence = 0;
-      const startH = heuristic(nodes[start], nodes[goal]);
-      open.push({ nodeId: start, f: startH, sequence: sequence++ });
+      const startH = hOf(start);
+      const startF = strat.priority(0, startH);
+      open.push({ nodeId: start, f: startF, sequence: sequence++ });
       result.steps.push(this.step(StepType.Initialize, 1, start, -1, 0, 0, -1, true,
-        score(start, 0, startH, startH)));
+        score(start, 0, startH, startF)));
 
       while (open.length) {
         result.steps.push(this.step(StepType.BeginLoop, 2));
         open.sort((a, b) => a.f - b.f || a.sequence - b.sequence);
         const current = open.shift().nodeId;
         if (closed.has(current)) continue;
-        const h = heuristic(nodes[current], nodes[goal]);
-        const currentScore = score(current, gScore.get(current), h, gScore.get(current) + h);
+        const h = hOf(current);
+        const currentScore = score(current, gScore.get(current), h, strat.priority(gScore.get(current), h));
         closed.add(current);
         result.expanded.push(currentScore);
         result.steps.push(this.step(StepType.SelectCurrent, 3, current, -1, 0, 0, -1, false, currentScore));
@@ -73,8 +85,8 @@
           if (improved) {
             cameFrom.set(neighbor, current);
             gScore.set(neighbor, tentative);
-            const estimate = heuristic(nodes[neighbor], nodes[goal]);
-            const neighborScore = score(neighbor, tentative, estimate, tentative + estimate);
+            const estimate = hOf(neighbor);
+            const neighborScore = score(neighbor, tentative, estimate, strat.priority(tentative, estimate));
             open.push({ nodeId: neighbor, f: neighborScore.f, sequence: sequence++ });
             result.steps.push(this.step(StepType.UpdateNeighbor, 9, current, neighbor,
               edgeCost, tentative, previous, true, neighborScore));
@@ -136,7 +148,7 @@
     return new JavaScriptEngine();
   }
 
-  const api = { StepType, JavaScriptEngine, WasmEngine, createEngine };
+  const api = { StepType, Strategies, heuristic, JavaScriptEngine, WasmEngine, createEngine };
   root.AStarEngine = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : window);
